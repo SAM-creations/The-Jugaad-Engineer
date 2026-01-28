@@ -85,17 +85,17 @@ export const analyzeRepairScenario = async (
 };
 
 export const generateRepairImage = async (prompt: string): Promise<string> => {
-  // Use Gemini 2.5 Flash Image for faster generation speed
+  // Use Gemini 3 Pro Image Preview for high quality results
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3-pro-image-preview',
       contents: {
         parts: [{ text: prompt + ", photorealistic, 4k, clear focus, engineering diagram style or hands-on repair photo" }]
       },
       config: {
         imageConfig: {
-          aspectRatio: "16:9"
-          // imageSize is not supported in 2.5 flash image, removing it
+          aspectRatio: "16:9",
+          imageSize: "1K"
         }
       }
     });
