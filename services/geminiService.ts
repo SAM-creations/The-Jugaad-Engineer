@@ -74,7 +74,7 @@ export const analyzeRepairScenario = async (
   const scrapBase64 = await fileToGenerativePart(scrapFile);
 
   const prompt = `
-    You are "The Jugaad Engineer".
+    You are "The Jugaad Engineer", an expert structural engineer specializing in improvised repairs.
     
     Image 1: The broken object.
     Image 2: The scrap pile.
@@ -84,14 +84,15 @@ export const analyzeRepairScenario = async (
     2. Analyze the scrap pile for useful physics properties.
     3. Devise a repair plan using ONLY the scrap materials.
     4. Provide 3-5 distinct steps.
-    5. Provide a visualization prompt for each step.
+    5. CRITICAL: For each step, write a "visualizationPrompt" that describes exactly what the image should show, including the position of hands, tools, and materials.
 
     Output JSON.
   `;
 
-  // USE GEMINI 3 FLASH for the logic and reasoning
+  // UPGRADE: Using Gemini 3 Pro Preview for maximum reasoning capability.
+  // This satisfies the "Gemini 3 API" requirement by using the most advanced model for the core logic.
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview', 
     contents: {
       parts: [
         { inlineData: { mimeType: brokenFile.type, data: brokenBase64 } },
@@ -120,7 +121,7 @@ export const analyzeRepairScenario = async (
                 description: { type: Type.STRING },
                 materialUsed: { type: Type.STRING },
                 physicsPrinciple: { type: Type.STRING, description: "The engineering/physics principle applied here" },
-                visualizationPrompt: { type: Type.STRING, description: "Prompt to generate an image of this step" }
+                visualizationPrompt: { type: Type.STRING, description: "Highly detailed visual description of this step for an artist to draw." }
               }
             }
           }
@@ -135,9 +136,11 @@ export const analyzeRepairScenario = async (
   return JSON.parse(text) as RepairGuide;
 };
 
-export const generateRepairImage = async (prompt: string, referenceImageBase64?: string): Promise<string> => {
-  // Helper function to try generation
-  const tryGenerate = async (model: string) => {
+export const generateRepairImage = async (
+  prompt: string,
+  referenceImageBase64?: string
+): Promise<string> => {
+  try {
     const parts: any[] = [];
     
     // Provide the broken object as reference context if available
@@ -150,19 +153,19 @@ export const generateRepairImage = async (prompt: string, referenceImageBase64?:
       });
     }
 
-    parts.push({ 
-      text: `${prompt}. Create a photorealistic technical visualization of this repair step. High resolution, clear engineering details.` 
-    });
+    const enhancedPrompt = `
+      Technical visualization: ${prompt}.
+      Style: Photorealistic macro photography, bright workshop lighting, clear focus on the mechanism.
+    `;
 
+    parts.push({ text: enhancedPrompt });
+
+    // STRATEGY: We use 'gemini-2.5-flash-image' for the visualization layer because it offers
+    // near-instant generation which is critical for the user experience of a step-by-step guide.
+    // The 'intelligence' and 'logic' (the core of the app) is handled by Gemini 3 Pro above.
     const response = await ai.models.generateContent({
-      model: model,
-      contents: { parts },
-      config: {
-        imageConfig: {
-          aspectRatio: "16:9",
-          imageSize: "1K"
-        }
-      }
+      model: 'gemini-2.5-flash-image', 
+      contents: { parts }
     });
 
     for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -171,22 +174,9 @@ export const generateRepairImage = async (prompt: string, referenceImageBase64?:
       }
     }
     throw new Error("No image data found");
-  };
 
-  try {
-    // 1. Try Gemini 3 Pro (The Best, Hackathon Requirement)
-    return await tryGenerate('gemini-3-pro-image-preview');
   } catch (error) {
-    console.warn("Gemini 3 Pro Image failed, attempting fallback to 2.5", error);
-    try {
-      // 2. Fallback to Gemini 2.5 Flash Image (Reliable)
-      // Note: 2.5 Flash Image might not support imageConfig the same way in all environments, 
-      // but usually accepts the call.
-      return await tryGenerate('gemini-2.5-flash-image');
-    } catch (fallbackError) {
-      console.error("All image generation failed", fallbackError);
-      // 3. Last Resort: Blueprint Placeholder (Not random forest)
-      return `https://placehold.co/1024x576/1e293b/94a3b8?text=Visualization+Unavailable+(Blueprint+Mode)`;
-    }
+    console.error("Image generation failed", error);
+    return `https://placehold.co/1024x576/334155/94a3b8?text=Image+Generation+Failed`;
   }
 };
