@@ -89,6 +89,7 @@ export const analyzeRepairScenario = async (
     Output JSON.
   `;
 
+  // USE GEMINI 3 FLASH for the logic and reasoning
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
@@ -135,11 +136,11 @@ export const analyzeRepairScenario = async (
 };
 
 export const generateRepairImage = async (prompt: string, referenceImageBase64?: string): Promise<string> => {
-  try {
+  // Helper function to try generation
+  const tryGenerate = async (model: string) => {
     const parts: any[] = [];
     
-    // Add reference image first if available. 
-    // This allows the model to "see" what it's repairing.
+    // Provide the broken object as reference context if available
     if (referenceImageBase64) {
       parts.push({
         inlineData: {
@@ -150,16 +151,18 @@ export const generateRepairImage = async (prompt: string, referenceImageBase64?:
     }
 
     parts.push({ 
-      text: prompt + ". The image should look like a technical repair step or hands-on engineering photo. High quality, realistic." 
+      text: `${prompt}. Create a photorealistic technical visualization of this repair step. High resolution, clear engineering details.` 
     });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image', // More robust for quick generation with references
-      contents: {
-        parts: parts
-      },
-      // gemini-2.5-flash-image doesn't support complex imageConfig like aspect ratio in all SDK versions yet,
-      // but works great for general generation.
+      model: model,
+      contents: { parts },
+      config: {
+        imageConfig: {
+          aspectRatio: "16:9",
+          imageSize: "1K"
+        }
+      }
     });
 
     for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -167,10 +170,23 @@ export const generateRepairImage = async (prompt: string, referenceImageBase64?:
         return `data:image/png;base64,${part.inlineData.data}`;
       }
     }
-    throw new Error("No image data found in response");
+    throw new Error("No image data found");
+  };
+
+  try {
+    // 1. Try Gemini 3 Pro (The Best, Hackathon Requirement)
+    return await tryGenerate('gemini-3-pro-image-preview');
   } catch (error) {
-    console.error("Image generation failed", error);
-    // Professional fallback instead of random nature photos
-    return `https://placehold.co/1024x576/1e293b/475569?text=Visualization+Unavailable`;
+    console.warn("Gemini 3 Pro Image failed, attempting fallback to 2.5", error);
+    try {
+      // 2. Fallback to Gemini 2.5 Flash Image (Reliable)
+      // Note: 2.5 Flash Image might not support imageConfig the same way in all environments, 
+      // but usually accepts the call.
+      return await tryGenerate('gemini-2.5-flash-image');
+    } catch (fallbackError) {
+      console.error("All image generation failed", fallbackError);
+      // 3. Last Resort: Blueprint Placeholder (Not random forest)
+      return `https://placehold.co/1024x576/1e293b/94a3b8?text=Visualization+Unavailable+(Blueprint+Mode)`;
+    }
   }
 };
