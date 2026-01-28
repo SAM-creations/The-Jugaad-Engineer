@@ -1,3 +1,4 @@
+
 export interface RepairStep {
   title: string;
   description: string;
@@ -5,6 +6,7 @@ export interface RepairStep {
   physicsPrinciple: string;
   visualizationPrompt: string;
   generatedImageUrl?: string;
+  audioData?: ArrayBuffer; // For TTS playback
 }
 
 export interface RepairGuide {

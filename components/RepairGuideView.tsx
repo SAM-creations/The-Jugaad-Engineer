@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { RepairGuide } from '../types';
-import { Play, Download, Share2, Wrench, AlertTriangle } from 'lucide-react';
+import { Play, Download, Share2, Wrench, AlertTriangle, Volume2, Loader2 } from 'lucide-react';
 import { PresentationMode } from './PresentationMode';
+import { generateStepAudio } from '../services/geminiService';
 
 interface RepairGuideViewProps {
   guide: RepairGuide;
@@ -10,6 +11,30 @@ interface RepairGuideViewProps {
 
 export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset }) => {
   const [showPresentation, setShowPresentation] = useState(false);
+  const [loadingAudioStep, setLoadingAudioStep] = useState<number | null>(null);
+  const [playingAudioStep, setPlayingAudioStep] = useState<number | null>(null);
+
+  const playAudio = async (text: string, index: number) => {
+    if (playingAudioStep === index) return; // Already playing (simplification: prevent overlap)
+    
+    try {
+      setLoadingAudioStep(index);
+      const audioBuffer = await generateStepAudio(text);
+      setLoadingAudioStep(null);
+      setPlayingAudioStep(index);
+
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+      source.onended = () => setPlayingAudioStep(null);
+      source.start();
+    } catch (e) {
+      console.error(e);
+      setLoadingAudioStep(null);
+      setPlayingAudioStep(null);
+    }
+  };
 
   if (showPresentation) {
     return <PresentationMode guide={guide} onClose={() => setShowPresentation(false)} />;
@@ -35,7 +60,7 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
             Start Repair Guide
           </button>
           <button 
-            onClick={() => setShowPresentation(true)} // In real app, this might just download pdf directly
+            onClick={() => setShowPresentation(true)} 
             className="flex items-center gap-2 px-6 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold transition-all border border-slate-700 hover:border-slate-500"
           >
             <Download size={20} />
@@ -79,7 +104,20 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
                 </div>
               </div>
               <div className="p-6 md:w-2/3 flex flex-col justify-center">
-                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-amber-400 transition-colors">{step.title}</h3>
+                <div className="flex justify-between items-start mb-2">
+                   <h3 className="text-xl font-bold text-white group-hover:text-amber-400 transition-colors">{step.title}</h3>
+                   <button 
+                    onClick={() => playAudio(step.description, idx)}
+                    disabled={loadingAudioStep === idx || playingAudioStep === idx}
+                    className={`p-2 rounded-full transition-all ${
+                      playingAudioStep === idx 
+                        ? 'bg-green-500/20 text-green-400' 
+                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                    }`}
+                   >
+                     {loadingAudioStep === idx ? <Loader2 size={18} className="animate-spin" /> : <Volume2 size={18} className={playingAudioStep === idx ? "animate-pulse" : ""} />}
+                   </button>
+                </div>
                 <p className="text-slate-400 mb-4">{step.description}</p>
                 <div className="flex gap-4 text-sm">
                   <div className="px-3 py-1 rounded-full bg-slate-700/50 text-slate-300 border border-slate-600">
