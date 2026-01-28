@@ -35,7 +35,7 @@ const App: React.FC = () => {
 
     try {
       // BRAIN 1: Analysis
-      console.log("Activating Brain 1: Gemini 3 Pro...");
+      console.log("Activating Brain 1: Gemini 3 Flash...");
       const guide = await analyzeRepairScenario(brokenImage, scrapImage);
       
       // Setup guide state immediately so user sees text while images load
@@ -159,7 +159,7 @@ const App: React.FC = () => {
             <div className="mt-16 grid grid-cols-3 gap-4 text-center opacity-50">
                <div className="p-4 border border-slate-700 rounded-lg">
                   <div className="font-bold text-amber-400 mb-1">Brain 1</div>
-                  <div className="text-xs uppercase tracking-widest text-slate-500 mb-2">Gemini 3 Pro</div>
+                  <div className="text-xs uppercase tracking-widest text-slate-500 mb-2">Gemini 3 Flash</div>
                   <div className="text-sm">Scans, Thinks & Plans</div>
                </div>
                <div className="p-4 border border-slate-700 rounded-lg">

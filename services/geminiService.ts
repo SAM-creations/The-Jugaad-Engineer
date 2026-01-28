@@ -7,8 +7,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * BRAIN INPUT PRE-PROCESSOR
- * Resizes and compresses images to ensure API stability and fast upload.
- * Large 4K/raw images often cause network timeouts or payload limits.
+ * Resizes images to ~1536px to balance detail for the AI and payload size for the API.
  */
 export const fileToGenerativePart = async (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -20,7 +19,7 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
         let width = img.width;
         let height = img.height;
         
-        // Limit max dimension to 1536px (optimal for Gemini vision)
+        // 1536px is the sweet spot for Gemini Vision (high detail, low latency)
         const MAX_SIZE = 1536; 
 
         if (width > height) {
@@ -77,8 +76,8 @@ const decodeAudioData = async (
 };
 
 // --- BRAIN 1: THE ANALYST ---
-// Model: gemini-3-pro-preview
-// Role: Visual Cortex + Logic Center + Physics Engine
+// Primary: gemini-3-flash-preview (Reasoning + Speed + Reliability)
+// Fallback: gemini-2.5-flash-latest (If quota exceeded)
 
 export const analyzeRepairScenario = async (
   brokenFile: File, 
@@ -89,75 +88,85 @@ export const analyzeRepairScenario = async (
   const brokenBase64 = await fileToGenerativePart(brokenFile);
   const scrapBase64 = await fileToGenerativePart(scrapFile);
 
-  const prompt = `
+  const systemPrompt = `
     You are BRAIN 1: The Master Engineer.
     
-    INPUTS:
-    - Image A: A broken object.
-    - Image B: A pile of scrap materials.
-
     MISSION:
-    1. VISUAL SCAN: Analyze Image A to find the mechanical failure.
-    2. RESOURCE SCAN: Analyze Image B to find materials with useful properties (elasticity, rigidity, conductivity, etc.).
-    3. PHYSICS SIMULATION: 'Think' about how to combine specific scrap items to fix the broken object.
+    1. VISUAL SCAN: Analyze Image A (Broken Object) for mechanical failure.
+    2. RESOURCE SCAN: Analyze Image B (Scrap Pile) for useful materials.
+    3. PHYSICS SIMULATION: 'Think' about how to fix it using ONLY the scrap.
     4. OUTPUT: A structured repair guide.
 
-    CRITICAL INSTRUCTION FOR "visualizationPrompt":
-    You must output a prompt for BRAIN 2 (The Artist).
-    Describe the scene vividly so BRAIN 2 can draw it.
-    Example: "Macro shot of a blue plastic pen being taped to a broken glasses arm using silver duct tape, hands visible holding it tight."
-
-    Return JSON format.
+    CRITICAL: For "visualizationPrompt", describe the scene vividly so BRAIN 2 (The Artist) can draw it.
+    Example: "Close up of a blue pen taped to a glasses arm with silver duct tape."
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', 
-      contents: {
-        parts: [
-          { inlineData: { mimeType: "image/jpeg", data: brokenBase64 } },
-          { inlineData: { mimeType: "image/jpeg", data: scrapBase64 } },
-          { text: prompt }
-        ]
-      },
-      config: {
-        // Enable "Thinking" for deep reasoning about physics
-        thinkingConfig: { thinkingBudget: 2048 }, 
-        maxOutputTokens: 8192,
-        
-        responseMimeType: 'application/json',
-        responseSchema: {
+  const commonSchema = {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING },
+      summary: { type: Type.STRING },
+      brokenObjectAnalysis: { type: Type.STRING },
+      scrapPileAnalysis: { type: Type.STRING },
+      steps: {
+        type: Type.ARRAY,
+        items: {
           type: Type.OBJECT,
           properties: {
             title: { type: Type.STRING },
-            summary: { type: Type.STRING },
-            brokenObjectAnalysis: { type: Type.STRING },
-            scrapPileAnalysis: { type: Type.STRING },
-            steps: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  materialUsed: { type: Type.STRING },
-                  physicsPrinciple: { type: Type.STRING },
-                  visualizationPrompt: { type: Type.STRING, description: "Instructions for Brain 2 to generate the image" }
-                }
-              }
-            }
+            description: { type: Type.STRING },
+            materialUsed: { type: Type.STRING },
+            physicsPrinciple: { type: Type.STRING },
+            visualizationPrompt: { type: Type.STRING, description: "Instructions for Brain 2" }
           }
         }
       }
+    }
+  };
+
+  const imageParts = [
+    { inlineData: { mimeType: "image/jpeg", data: brokenBase64 } },
+    { inlineData: { mimeType: "image/jpeg", data: scrapBase64 } },
+    { text: systemPrompt }
+  ];
+
+  // ATTEMPT 1: Gemini 3 Flash (Supports Thinking, less likely to crash)
+  try {
+    console.log("Brain 1: Attempting Gemini 3 Flash...");
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview', 
+      contents: { parts: imageParts },
+      config: {
+        thinkingConfig: { thinkingBudget: 2048 }, 
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json',
+        responseSchema: commonSchema
+      }
     });
 
-    const text = response.text;
-    if (!text) throw new Error("Brain 1 (Gemini 3 Pro) returned empty response.");
-    
-    return JSON.parse(text) as RepairGuide;
-  } catch (error) {
-    console.error("Brain 1 Analysis Failed:", error);
-    throw error;
+    if (response.text) return JSON.parse(response.text) as RepairGuide;
+  } catch (error: any) {
+    console.warn("Gemini 3 Flash failed (likely quota). Switching to fallback.", error);
+  }
+
+  // ATTEMPT 2: Gemini 2.5 Flash (Ultra Stable Fallback)
+  try {
+    console.log("Brain 1: Fallback to Gemini 2.5 Flash...");
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-latest', 
+      contents: { parts: imageParts },
+      config: {
+        // No thinking config for the fallback to ensure compatibility
+        responseMimeType: 'application/json',
+        responseSchema: commonSchema
+      }
+    });
+
+    if (response.text) return JSON.parse(response.text) as RepairGuide;
+    throw new Error("Both Brain 1 models failed to generate a response.");
+  } catch (fallbackError: any) {
+    console.error("Brain 1 Fatal Error:", fallbackError);
+    throw new Error("Analysis failed: " + fallbackError.message);
   }
 };
 
@@ -205,7 +214,6 @@ export const generateRepairImage = async (
 
   } catch (error) {
     console.error("Brain 2 Generation Failed:", error);
-    // Return a visible error placeholder so the UI doesn't crash
     return `https://placehold.co/1024x576/334155/94a3b8?text=Visualization+Error`;
   }
 };
