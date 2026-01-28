@@ -1,0 +1,7 @@
+{
+  "name": "The Jugaad Engineer",
+  "description": "An AI-powered 'MacGyver' agent that analyzes broken machinery and available scrap materials to generate physics-valid repair guides and visualizations.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
