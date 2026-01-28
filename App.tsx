@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { AnalysisLoading } from './components/AnalysisLoading';
 import { RepairGuideView } from './components/RepairGuideView';
-import { analyzeRepairScenario, generateRepairImage } from './services/geminiService';
+import { analyzeRepairScenario, generateRepairImage, fileToGenerativePart } from './services/geminiService';
 import { AppState, RepairGuide } from './types';
 import { Wrench, Zap, FileText } from 'lucide-react';
 
@@ -37,14 +37,16 @@ const App: React.FC = () => {
       setRepairGuide(guide);
       setAppState(AppState.GENERATING_IMAGES);
 
+      // Prepare reference image for generation (the broken object)
+      const referenceBase64 = await fileToGenerativePart(brokenImage);
+
       // Map steps to image generation promises
       const updatedSteps = [...guide.steps];
       
-      // We'll generate images sequentially to avoid rate limits if any, 
-      // but concurrently is faster. Let's do parallel for better UX.
       const imagePromises = updatedSteps.map(async (step, index) => {
         if (step.visualizationPrompt) {
-          const imageUrl = await generateRepairImage(step.visualizationPrompt);
+          // Pass the broken object as reference so the generated image looks like the real thing
+          const imageUrl = await generateRepairImage(step.visualizationPrompt, referenceBase64);
           updatedSteps[index] = { ...step, generatedImageUrl: imageUrl };
           // Update state progressively to show images as they load
           setRepairGuide(prev => prev ? ({ ...prev, steps: [...updatedSteps] }) : null);

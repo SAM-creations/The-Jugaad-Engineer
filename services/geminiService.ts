@@ -4,7 +4,7 @@ import { RepairGuide } from '../types';
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Helper to convert File to Base64
-const fileToGenerativePart = async (file: File): Promise<string> => {
+export const fileToGenerativePart = async (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -29,15 +29,6 @@ const decodeAudioData = async (
     bytes[i] = binaryString.charCodeAt(i);
   }
   
-  // For Gemini TTS (24kHz), we need to handle the raw PCM manually or use decodeAudioData
-  // if the container format was supported. Gemini returns raw PCM usually.
-  // However, the easiest way provided in docs is utilizing the context to decode.
-  // NOTE: If Gemini returns raw PCM without headers, decodeAudioData might fail in some browsers
-  // unless we wrap it in a WAV container. 
-  // Let's use a robust approach: Create a buffer directly assuming standard PCM if decode fails,
-  // or trust the browser's ability to decode the specific format Gemini returns.
-  
-  // Current 2.5 Flash TTS Preview returns raw PCM. We need to process it.
   const dataInt16 = new Int16Array(bytes.buffer);
   const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
   const channelData = buffer.getChannelData(0);
@@ -56,7 +47,7 @@ export const generateStepAudio = async (text: string): Promise<AudioBuffer> => {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' }, // 'Kore' sounds authoritative/engineering-like
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
           },
         },
       },
@@ -99,7 +90,7 @@ export const analyzeRepairScenario = async (
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview', // Supports thinking!
+    model: 'gemini-3-flash-preview',
     contents: {
       parts: [
         { inlineData: { mimeType: brokenFile.type, data: brokenBase64 } },
@@ -108,11 +99,8 @@ export const analyzeRepairScenario = async (
       ]
     },
     config: {
-      // HACKATHON WINNING FEATURE: Thinking Config
-      // This tells the model to "think" about the physics before answering.
-      // 2048 tokens reserved for thinking.
       thinkingConfig: { thinkingBudget: 2048 }, 
-      maxOutputTokens: 8192, // Must be higher than thinking budget
+      maxOutputTokens: 8192,
       
       responseMimeType: 'application/json',
       responseSchema: {
@@ -146,19 +134,32 @@ export const analyzeRepairScenario = async (
   return JSON.parse(text) as RepairGuide;
 };
 
-export const generateRepairImage = async (prompt: string): Promise<string> => {
+export const generateRepairImage = async (prompt: string, referenceImageBase64?: string): Promise<string> => {
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview', // High quality images
-      contents: {
-        parts: [{ text: prompt + ", photorealistic, 4k, clear focus, engineering diagram style or hands-on repair photo" }]
-      },
-      config: {
-        imageConfig: {
-          aspectRatio: "16:9",
-          imageSize: "1K"
+    const parts: any[] = [];
+    
+    // Add reference image first if available. 
+    // This allows the model to "see" what it's repairing.
+    if (referenceImageBase64) {
+      parts.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: referenceImageBase64
         }
-      }
+      });
+    }
+
+    parts.push({ 
+      text: prompt + ". The image should look like a technical repair step or hands-on engineering photo. High quality, realistic." 
+    });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image', // More robust for quick generation with references
+      contents: {
+        parts: parts
+      },
+      // gemini-2.5-flash-image doesn't support complex imageConfig like aspect ratio in all SDK versions yet,
+      // but works great for general generation.
     });
 
     for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -169,6 +170,7 @@ export const generateRepairImage = async (prompt: string): Promise<string> => {
     throw new Error("No image data found in response");
   } catch (error) {
     console.error("Image generation failed", error);
-    return `https://picsum.photos/800/600?random=${Math.random()}`;
+    // Professional fallback instead of random nature photos
+    return `https://placehold.co/1024x576/1e293b/475569?text=Visualization+Unavailable`;
   }
 };
