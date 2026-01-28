@@ -1,14 +1,10 @@
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Type, Modality, Chat } from "@google/genai";
 import { RepairGuide } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- UTILITIES ---
 
-/**
- * BRAIN INPUT PRE-PROCESSOR
- * Resizes images to ~1536px to balance detail for the AI and payload size for the API.
- */
 export const fileToGenerativePart = async (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -19,7 +15,6 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
         let width = img.width;
         let height = img.height;
         
-        // 1536px is the sweet spot for Gemini Vision (high detail, low latency)
         const MAX_SIZE = 1536; 
 
         if (width > height) {
@@ -43,7 +38,6 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
         }
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Compress to JPEG 0.85 quality
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85); 
         resolve(dataUrl.split(',')[1]);
       };
@@ -76,15 +70,12 @@ const decodeAudioData = async (
 };
 
 // --- BRAIN 1: THE ANALYST ---
-// Primary: gemini-3-flash-preview (Reasoning + Speed + Reliability)
-// Fallback: gemini-2.5-flash-latest (If quota exceeded)
 
 export const analyzeRepairScenario = async (
   brokenFile: File, 
   scrapFile: File
 ): Promise<RepairGuide> => {
   
-  // Pre-process inputs
   const brokenBase64 = await fileToGenerativePart(brokenFile);
   const scrapBase64 = await fileToGenerativePart(scrapFile);
 
@@ -130,7 +121,6 @@ export const analyzeRepairScenario = async (
     { text: systemPrompt }
   ];
 
-  // ATTEMPT 1: Gemini 3 Flash (Supports Thinking, less likely to crash)
   try {
     console.log("Brain 1: Attempting Gemini 3 Flash...");
     const response = await ai.models.generateContent({
@@ -146,17 +136,15 @@ export const analyzeRepairScenario = async (
 
     if (response.text) return JSON.parse(response.text) as RepairGuide;
   } catch (error: any) {
-    console.warn("Gemini 3 Flash failed (likely quota). Switching to fallback.", error);
+    console.warn("Gemini 3 Flash failed. Switching to fallback.", error);
   }
 
-  // ATTEMPT 2: Gemini 2.5 Flash (Ultra Stable Fallback)
   try {
     console.log("Brain 1: Fallback to Gemini 2.5 Flash...");
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-latest', 
       contents: { parts: imageParts },
       config: {
-        // No thinking config for the fallback to ensure compatibility
         responseMimeType: 'application/json',
         responseSchema: commonSchema
       }
@@ -171,50 +159,52 @@ export const analyzeRepairScenario = async (
 };
 
 // --- BRAIN 2: THE ARTIST ---
-// Model: gemini-2.5-flash-image
-// Role: Visualizer + Illustrator
 
 export const generateRepairImage = async (
   prompt: string,
   referenceImageBase64?: string
 ): Promise<string> => {
-  try {
-    const parts: any[] = [];
-    
-    // Provide context if available (The Broken Object)
-    if (referenceImageBase64) {
-      parts.push({
-        inlineData: {
-          mimeType: "image/jpeg",
-          data: referenceImageBase64
+  
+  // ATTEMPT 1: Photorealistic with Reference
+  // This is best, but sometimes fails due to Safety checks on the user's uploaded image.
+  if (referenceImageBase64) {
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image', 
+        contents: {
+          parts: [
+            { inlineData: { mimeType: "image/jpeg", data: referenceImageBase64 } },
+            { text: `Create a photorealistic instructional image. Action: ${prompt}. Style: Repair manual photography, hands visible working.` }
+          ]
         }
       });
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    } catch (e) {
+      console.warn("Brain 2: Photorealistic attempt failed, switching to Blueprint mode.", e);
     }
+  }
 
-    // Enhance prompt for the image model
-    const enhancedPrompt = `
-      Create a photorealistic instructional image.
-      Action to Depict: ${prompt}
-      Style: High-definition repair manual photography, clear focus on the hands and materials, workshop workbench background.
-    `;
-
-    parts.push({ text: enhancedPrompt });
-
+  // ATTEMPT 2: Technical Illustration (Blueprint) - No Reference Image
+  // This is the safety net. It almost always works because it doesn't use the "unsafe" user image.
+  try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image', 
-      contents: { parts }
-    });
-
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
+      contents: {
+        parts: [
+          { text: `Draw a technical blueprint illustration style image. Subject: ${prompt}. Style: Clean vector art, engineering schematic, blue or white background, high contrast.` }
+        ]
       }
+    });
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-    throw new Error("Brain 2 (Image Gen) did not return an image.");
-
+    throw new Error("No image generated in fallback.");
   } catch (error) {
-    console.error("Brain 2 Generation Failed:", error);
-    return `https://placehold.co/1024x576/334155/94a3b8?text=Visualization+Error`;
+    console.error("Brain 2 Final Failure:", error);
+    // Return a stylish error placeholder
+    return `https://placehold.co/1024x576/1e293b/475569?text=Visual+Unavailable`;
   }
 };
 
@@ -243,4 +233,29 @@ export const generateStepAudio = async (text: string): Promise<AudioBuffer> => {
     console.error("Audio generation failed", error);
     throw error;
   }
+};
+
+// --- CHAT HELPER ---
+export const initChatSession = (guide: RepairGuide): Chat => {
+  const context = `
+    You are The Jugaad Engineer's Assistant.
+    You are discussing a repair guide with the user.
+    
+    REPAIR CONTEXT:
+    Title: ${guide.title}
+    Summary: ${guide.summary}
+    Problem: ${guide.brokenObjectAnalysis}
+    Resources: ${guide.scrapPileAnalysis}
+    Steps:
+    ${guide.steps.map((s, i) => `${i+1}. ${s.title}: ${s.description} (Using: ${s.materialUsed})`).join('\n')}
+
+    Be helpful, technical but accessible, and encouraging. Answer questions about the steps or alternative materials.
+  `;
+
+  return ai.chats.create({
+    model: 'gemini-3-flash-preview',
+    config: {
+      systemInstruction: context,
+    },
+  });
 };

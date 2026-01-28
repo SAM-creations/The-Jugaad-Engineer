@@ -1,21 +1,22 @@
 import React, { useState } from 'react';
 import { RepairGuide } from '../types';
-import { Play, Download, Share2, Wrench, AlertTriangle, Volume2, Loader2 } from 'lucide-react';
+import { Play, Download, Share2, Wrench, AlertTriangle, Volume2, Loader2, MessageSquare } from 'lucide-react';
 import { PresentationMode } from './PresentationMode';
 import { generateStepAudio } from '../services/geminiService';
 
 interface RepairGuideViewProps {
   guide: RepairGuide;
   onReset: () => void;
+  onOpenChat: () => void;
 }
 
-export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset }) => {
+export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset, onOpenChat }) => {
   const [showPresentation, setShowPresentation] = useState(false);
   const [loadingAudioStep, setLoadingAudioStep] = useState<number | null>(null);
   const [playingAudioStep, setPlayingAudioStep] = useState<number | null>(null);
 
   const playAudio = async (text: string, index: number) => {
-    if (playingAudioStep === index) return; // Already playing (simplification: prevent overlap)
+    if (playingAudioStep === index) return; 
     
     try {
       setLoadingAudioStep(index);
@@ -60,11 +61,11 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
             Start Repair Guide
           </button>
           <button 
-            onClick={() => setShowPresentation(true)} 
-            className="flex items-center gap-2 px-6 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold transition-all border border-slate-700 hover:border-slate-500"
+            onClick={onOpenChat}
+            className="flex items-center gap-2 px-6 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold transition-all border border-slate-700 hover:border-amber-500/50 hover:text-amber-400"
           >
-            <Download size={20} />
-            Export PPT / PDF
+            <MessageSquare size={20} />
+            Talk with Engineer
           </button>
         </div>
       </div>
@@ -96,7 +97,8 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
                    <img src={step.generatedImageUrl} alt={step.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-600 text-sm p-4 text-center">
-                    Visualizing...
+                    <Loader2 size={24} className="animate-spin mb-2" />
+                    <p>Visualizing...</p>
                   </div>
                 )}
                 <div className="absolute top-0 left-0 bg-slate-900/80 px-3 py-1 text-xs font-mono text-white rounded-br-lg">

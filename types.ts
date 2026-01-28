@@ -31,3 +31,10 @@ export interface AnalyzedImages {
   brokenFile: File;
   scrapFile: File;
 }
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+  isError?: boolean;
+}

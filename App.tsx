@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { AnalysisLoading } from './components/AnalysisLoading';
 import { RepairGuideView } from './components/RepairGuideView';
+import { ChatDrawer } from './components/ChatDrawer';
 import { analyzeRepairScenario, generateRepairImage, fileToGenerativePart } from './services/geminiService';
 import { AppState, RepairGuide } from './types';
-import { Wrench, Zap, FileText, AlertCircle } from 'lucide-react';
+import { Wrench, Zap, AlertCircle, MessageSquare } from 'lucide-react';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
@@ -14,6 +15,7 @@ const App: React.FC = () => {
   const [scrapPreview, setScrapPreview] = useState<string | null>(null);
   const [repairGuide, setRepairGuide] = useState<RepairGuide | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const handleBrokenImage = (file: File | null) => {
     setBrokenImage(file);
@@ -78,10 +80,11 @@ const App: React.FC = () => {
     setScrapPreview(null);
     setRepairGuide(null);
     setErrorMessage(null);
+    setIsChatOpen(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 text-slate-100 selection:bg-amber-500/30">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 text-slate-100 selection:bg-amber-500/30 overflow-x-hidden">
       
       {appState === AppState.ANALYZING && <AnalysisLoading />}
 
@@ -91,10 +94,22 @@ const App: React.FC = () => {
             <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
               <Wrench size={18} className="text-slate-900" />
             </div>
-            <span className="font-display font-bold text-xl tracking-tight">The Jugaad Engineer</span>
+            <span className="font-display font-bold text-xl tracking-tight hidden md:block">The Jugaad Engineer</span>
+            <span className="font-display font-bold text-xl tracking-tight md:hidden">Jugaad Eng.</span>
           </div>
-          <div className="text-xs font-mono text-slate-500 hidden sm:block">
-            HACKATHON 2026 • GEMINI 3 POWERED
+          <div className="flex items-center gap-4">
+             <div className="text-xs font-mono text-slate-500 hidden sm:block">
+               HACKATHON 2026 • GEMINI 3 POWERED
+             </div>
+             {repairGuide && (
+               <button 
+                 onClick={() => setIsChatOpen(true)}
+                 className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-amber-500/10 hover:text-amber-400 border border-slate-700 rounded-full transition-colors text-sm"
+               >
+                 <MessageSquare size={14} />
+                 <span>Ask Engineer</span>
+               </button>
+             )}
           </div>
         </div>
       </nav>
@@ -177,9 +192,22 @@ const App: React.FC = () => {
         )}
 
         {(appState === AppState.GENERATING_IMAGES || appState === AppState.READY) && repairGuide && (
-           <RepairGuideView guide={repairGuide} onReset={resetApp} />
+           <RepairGuideView 
+             guide={repairGuide} 
+             onReset={resetApp} 
+             onOpenChat={() => setIsChatOpen(true)}
+            />
         )}
       </main>
+
+      {/* Chat Drawer */}
+      {repairGuide && (
+        <ChatDrawer 
+          guide={repairGuide} 
+          isOpen={isChatOpen} 
+          onClose={() => setIsChatOpen(false)} 
+        />
+      )}
 
       <style>{`
         @keyframes fadeIn {
