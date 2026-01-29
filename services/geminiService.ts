@@ -1,9 +1,8 @@
 
 import { GoogleGenAI, Type, Modality, Chat, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import { RepairGuide, ImageSize } from '../types';
+import { RepairGuide } from '../types';
 
-// Use a factory function to ensure we always use the latest API context/key
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- UTILITIES ---
 
@@ -76,13 +75,12 @@ const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
 ];
 
-// --- BRAIN 1: THE ANALYST (Gemini 3 Pro with Thinking) ---
+// --- BRAIN 1: THE ANALYST (Gemini 3 Flash - Free Tier Thinking) ---
 
 export const analyzeRepairScenario = async (
   brokenFile: File, 
   scrapFile: File
 ): Promise<RepairGuide> => {
-  const ai = getAI();
   const brokenBase64 = await fileToGenerativePart(brokenFile);
   const scrapBase64 = await fileToGenerativePart(scrapFile);
 
@@ -90,17 +88,15 @@ export const analyzeRepairScenario = async (
     You are BRAIN 1: The Master Engineer.
     
     MISSION:
-    1. VISUAL SCAN: Analyze Image A (Broken Object) and Image B (Scrap Pile).
-    2. PHYSICS REASONING: Use your internal thinking budget to simulate a physics-valid repair using only materials from Image B.
-    3. PLAN: Create a multi-step guide.
-    4. ART DIRECTION: For each step, write a highly descriptive "visualizationPrompt".
+    1. VISUAL SCAN: Analyze the broken object and scrap pile images.
+    2. PHYSICS REASONING: Use your thinking budget to plan a viable repair using only the scrap materials.
+    3. PLAN: Create a high-quality repair guide.
+    4. ART DIRECTION: For each step, generate a descriptive "visualizationPrompt" for Brain 2.
     
-    GUIDELINES FOR VISUALIZATION PROMPTS:
-    - Describe the scene cinematically. 
-    - Mention: lighting (workshop, neon), perspective (macro close-up), and the specific material joining.
-    - Focus on the "repairing action".
-    - Avoid forbidden words like "broken" or "shattered" to bypass safety filters. Use "fused", "assembled", "interlocked".
-    - Target: Professional repair photography.
+    PROMPT GUIDELINES:
+    - Focus on the ACTION: "Hands assembling [item] with [material]".
+    - Style: "Bright workshop lighting", "Macro technical photo", "Hyper-detailed".
+    - Safety: Avoid words like "broken" or "trash". Use "fused assembly", "reclaimed parts", "interlocked structure".
   `;
 
   const commonSchema = {
@@ -119,7 +115,7 @@ export const analyzeRepairScenario = async (
             description: { type: Type.STRING },
             materialUsed: { type: Type.STRING },
             physicsPrinciple: { type: Type.STRING },
-            visualizationPrompt: { type: Type.STRING, description: "Detailed scene description for the image generator" }
+            visualizationPrompt: { type: Type.STRING }
           }
         }
       }
@@ -132,40 +128,33 @@ export const analyzeRepairScenario = async (
     { text: systemPrompt }
   ];
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', 
-      contents: { parts: imageParts },
-      config: {
-        thinkingConfig: { thinkingBudget: 32768 }, 
-        responseMimeType: 'application/json',
-        responseSchema: commonSchema,
-        safetySettings: SAFETY_SETTINGS
-      }
-    });
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview', 
+    contents: { parts: imageParts },
+    config: {
+      thinkingConfig: { thinkingBudget: 24576 }, // Max for Gemini 3 Flash
+      responseMimeType: 'application/json',
+      responseSchema: commonSchema,
+      safetySettings: SAFETY_SETTINGS
+    }
+  });
 
-    if (response.text) return JSON.parse(response.text) as RepairGuide;
-    throw new Error("Empty response from Engineer Brain");
-  } catch (error: any) {
-    console.error("Brain 1 Analysis failed:", error);
-    throw error;
-  }
+  if (response.text) return JSON.parse(response.text) as RepairGuide;
+  throw new Error("Failed to generate repair guide.");
 };
 
-// --- BRAIN 2: THE ARTIST (Nano Banana Pro / Gemini 3 Pro Image) ---
+// --- BRAIN 2: THE ARTIST (Gemini 2.5 Flash Image - Free Tier) ---
 
 export const generateRepairImage = async (
   prompt: string,
-  imageSize: ImageSize,
   referenceImageBase64?: string
 ): Promise<string | null> => {
-  const ai = getAI();
-  const safePrompt = prompt.replace(/broken|damage|shatter|blood|hurt|injury|shrapnel/gi, "repair item");
+  const safePrompt = prompt.replace(/broken|damage|shatter|blood|hurt|trash/gi, "repair item");
 
   try {
     const contents: any = {
       parts: [
-        { text: `A professional instructional photo. Subject: ${safePrompt}. Style: Cinematic workshop lighting, 8k resolution, macro photography, depth of field, clear mechanical detail.` }
+        { text: `A professional technical photo. Action: ${safePrompt}. Style: Bright workshop lighting, macro close-up, sharp focus, 8k detail.` }
       ]
     };
 
@@ -176,13 +165,10 @@ export const generateRepairImage = async (
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-2.5-flash-image',
       contents: contents,
       config: {
-        imageConfig: {
-          aspectRatio: "16:9",
-          imageSize: imageSize
-        },
+        imageConfig: { aspectRatio: "16:9" },
         safetySettings: SAFETY_SETTINGS
       }
     });
@@ -190,37 +176,17 @@ export const generateRepairImage = async (
     const candidate = response.candidates?.[0];
     if (candidate) {
       for (const part of candidate.content.parts) {
-        if (part.inlineData) {
-          return `data:image/png;base64,${part.inlineData.data}`;
-        }
-      }
-    }
-  } catch (error: any) {
-    console.warn("Brain 2 Pro Image failed. Attempting fallback...", error);
-    
-    // Fallback to Flash Image if Pro fails (often due to project quota)
-    try {
-      const fallbackResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [{ text: `Technical illustration of ${safePrompt}` }]
-        },
-        config: { safetySettings: SAFETY_SETTINGS }
-      });
-      for (const part of fallbackResponse.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
-    } catch (fallbackError) {
-      console.error("All image fallbacks failed:", fallbackError);
     }
+  } catch (error) {
+    console.warn("Brain 2 visualization failed:", error);
   }
-
   return null;
 };
 
 // --- TTS & CHAT ---
 export const generateStepAudio = async (text: string): Promise<AudioBuffer> => {
-  const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text }] }],
@@ -237,12 +203,39 @@ export const generateStepAudio = async (text: string): Promise<AudioBuffer> => {
 };
 
 export const initChatSession = (guide: RepairGuide): Chat => {
-  const ai = getAI();
+  const guideContext = `
+    CURRENT REPAIR PROJECT: ${guide.title}
+    SUMMARY: ${guide.summary}
+    
+    DAMAGE ASSESSMENT:
+    ${guide.brokenObjectAnalysis}
+    
+    SCRAP RESOURCES IDENTIFIED:
+    ${guide.scrapPileAnalysis}
+    
+    GENERATED REPAIR STEPS:
+    ${guide.steps.map((s, i) => `STEP ${i + 1}: ${s.title}
+    Description: ${s.description}
+    Material: ${s.materialUsed}
+    Physics Principle: ${s.physicsPrinciple}`).join('\n\n')}
+  `;
+
   return ai.chats.create({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     config: {
-      systemInstruction: `You are the Engineer for: ${guide.title}. Use your complex reasoning to help the user.`,
-      thinkingConfig: { thinkingBudget: 16000 }
+      systemInstruction: `You are the Master Engineer behind "The Jugaad Engineer" app. 
+      You have just successfully designed a technical repair plan for a user's broken machinery using only available scrap materials.
+      
+      HERE IS THE FULL CONTEXT OF THE CURRENT PLAN SHOWN ON THE USER'S SCREEN:
+      ${guideContext}
+      
+      Your role is to:
+      1. Answer questions about these specific steps.
+      2. Explain the physics behind why these materials work together.
+      3. Offer encouragement and safety advice.
+      4. If the user asks for changes, explain why your original choice was logically sound, but offer "Jugaad" alternatives if they are out of certain materials.
+      
+      Always stay in character as a brilliant, slightly gritty, but very helpful engineering mentor.`,
     },
   });
 };

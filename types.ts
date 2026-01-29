@@ -1,6 +1,4 @@
 
-export type ImageSize = "1K" | "2K" | "4K";
-
 export interface RepairStep {
   title: string;
   description: string;
@@ -24,8 +22,7 @@ export enum AppState {
   ANALYZING = 'ANALYZING',
   GENERATING_IMAGES = 'GENERATING_IMAGES',
   READY = 'READY',
-  ERROR = 'ERROR',
-  NEEDS_KEY = 'NEEDS_KEY'
+  ERROR = 'ERROR'
 }
 
 export interface AnalyzedImages {
