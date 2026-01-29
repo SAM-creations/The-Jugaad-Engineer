@@ -1,4 +1,6 @@
 
+export type ImageSize = "1K" | "2K" | "4K";
+
 export interface RepairStep {
   title: string;
   description: string;
@@ -6,7 +8,7 @@ export interface RepairStep {
   physicsPrinciple: string;
   visualizationPrompt: string;
   generatedImageUrl?: string;
-  audioData?: ArrayBuffer; // For TTS playback
+  audioData?: ArrayBuffer;
 }
 
 export interface RepairGuide {
@@ -22,7 +24,8 @@ export enum AppState {
   ANALYZING = 'ANALYZING',
   GENERATING_IMAGES = 'GENERATING_IMAGES',
   READY = 'READY',
-  ERROR = 'ERROR'
+  ERROR = 'ERROR',
+  NEEDS_KEY = 'NEEDS_KEY'
 }
 
 export interface AnalyzedImages {
