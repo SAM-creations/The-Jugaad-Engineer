@@ -169,6 +169,7 @@ export const generateRepairImage = async (
   // This is best, but sometimes fails due to Safety checks on the user's uploaded image.
   if (referenceImageBase64) {
     try {
+      console.log("Brain 2: Generating photorealistic image...");
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image', 
         contents: {
@@ -188,8 +189,8 @@ export const generateRepairImage = async (
 
   // ATTEMPT 2: Technical Illustration (Blueprint) - No Reference Image
   // This is the safety net. It almost always works because it doesn't use the "unsafe" user image.
-  // It uses a distinct aesthetic (Blue/White Blueprint) so it looks intentional, not like a mistake.
   try {
+    console.log("Brain 2: Fallback to blueprint...");
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image', 
       contents: {
@@ -201,12 +202,31 @@ export const generateRepairImage = async (
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-    throw new Error("No image generated in fallback.");
   } catch (error) {
-    console.error("Brain 2 Final Failure:", error);
-    // Return a stylish error placeholder
-    return `https://placehold.co/1024x576/1e293b/475569?text=Visual+Unavailable`;
+     console.warn("Brain 2: Blueprint attempt failed.", error);
   }
+
+  // ATTEMPT 3: Minimalist Safety Fallback - Absolute Last Resort
+  // Very simple prompt to avoid any complex safety triggers
+  try {
+    console.log("Brain 2: Fallback to minimalist icon...");
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image', 
+      contents: {
+        parts: [
+          { text: `Simple vector icon of a repair tool. Style: Minimalist white lines on dark blue background.` }
+        ]
+      }
+    });
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+    }
+  } catch (error) {
+     console.error("Brain 2: All attempts failed.", error);
+  }
+
+  // Return a stylish error placeholder if ALL 3 attempts fail
+  return `https://placehold.co/1280x720/1e293b/94a3b8?text=Engineering+Schematic+Pending...&font=roboto`;
 };
 
 // --- TTS HELPER ---

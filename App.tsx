@@ -75,17 +75,26 @@ const App: React.FC = () => {
 
       const updatedSteps = [...guide.steps];
       
-      const imagePromises = updatedSteps.map(async (step, index) => {
-        // Feed the specific visualization prompt from Brain 1 into Brain 2
+      // CRITICAL UPDATE: Sequential Generation
+      // Generating all images at once (Promise.all) causes 429 Rate Limit errors.
+      // We loop through them one by one to ensure reliability.
+      for (let i = 0; i < updatedSteps.length; i++) {
+        const step = updatedSteps[i];
         const visualPrompt = step.visualizationPrompt || step.description;
-        const imageUrl = await generateRepairImage(visualPrompt, referenceBase64);
-        updatedSteps[index] = { ...step, generatedImageUrl: imageUrl };
         
-        // Progressive update
-        setRepairGuide(prev => prev ? ({ ...prev, steps: [...updatedSteps] }) : null);
-      });
+        try {
+          // Pass the step index to help log progress
+          const imageUrl = await generateRepairImage(visualPrompt, referenceBase64);
+          updatedSteps[i] = { ...step, generatedImageUrl: imageUrl };
+          
+          // Update state after EACH successful generation so user sees progress
+          setRepairGuide(prev => prev ? ({ ...prev, steps: [...updatedSteps] }) : null);
+        } catch (imgError) {
+           console.error(`Failed to generate image for step ${i+1}`, imgError);
+           // Keep the step without an image rather than crashing
+        }
+      }
 
-      await Promise.all(imagePromises);
       setAppState(AppState.READY);
 
     } catch (error: any) {
