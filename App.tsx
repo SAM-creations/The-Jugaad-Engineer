@@ -37,23 +37,20 @@ const App: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      // BRAIN 1: Think and Plan (Gemini 3 Flash Thinking)
+      // BRAIN 1: Think and Plan
       const guide = await analyzeRepairScenario(brokenImage, scrapImage);
       setRepairGuide(guide);
       
-      // Move to next state so the UI renders the steps with "Blueprint" placeholders
+      // Move to next state to show steps with placeholders while images generate
       setAppState(AppState.GENERATING_IMAGES);
 
-      // BRAIN 2: Visualize (Gemini 2.5 Flash Image)
-      // Convert reference image to base64 once
+      // BRAIN 2: Visualize (Parallel Execution)
       const referenceBase64 = await fileToGenerativePart(brokenImage);
       
-      // PARALLEL EXECUTION: Launch all image generation requests at once
       const imagePromises = guide.steps.map(async (step, index) => {
         try {
           const imageUrl = await generateRepairImage(step.visualizationPrompt, referenceBase64);
           if (imageUrl) {
-            // Update state immediately for this specific step so it "pops in"
             setRepairGuide(prev => {
               if (!prev) return null;
               const newSteps = [...prev.steps];
@@ -66,9 +63,7 @@ const App: React.FC = () => {
         }
       });
 
-      // Wait for all requests to finish (or timeout/fail)
       await Promise.all(imagePromises);
-
       setAppState(AppState.READY);
 
     } catch (error: any) {
