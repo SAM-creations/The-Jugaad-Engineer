@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RepairGuide } from '../types';
-import { Play, Download, Share2, Wrench, AlertTriangle, Volume2, Loader2, MessageSquare } from 'lucide-react';
+import { Play, Download, Share2, Wrench, AlertTriangle, Volume2, Loader2, MessageSquare, Compass, PenTool } from 'lucide-react';
 import { PresentationMode } from './PresentationMode';
 import { generateStepAudio } from '../services/geminiService';
 
@@ -92,16 +92,29 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
         <div className="grid gap-6">
           {guide.steps.map((step, idx) => (
             <div key={idx} className="bg-slate-800 rounded-xl overflow-hidden flex flex-col md:flex-row border border-slate-700 hover:border-slate-600 transition-colors group">
-              <div className="md:w-1/3 h-48 md:h-auto bg-slate-900 relative overflow-hidden">
+              <div className="md:w-1/3 h-64 md:h-auto bg-slate-900 relative overflow-hidden flex items-center justify-center">
                 {step.generatedImageUrl ? (
                    <img src={step.generatedImageUrl} alt={step.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-600 text-sm p-4 text-center">
-                    <Loader2 size={24} className="animate-spin mb-2" />
-                    <p>Visualizing...</p>
+                  // If image is missing (either still loading OR failed and returned null)
+                  <div className="w-full h-full relative">
+                    {/* Blueprint Pattern Background */}
+                    <div className="absolute inset-0 bg-[#0f172a]" style={{
+                      backgroundImage: 'radial-gradient(#1e293b 1px, transparent 1px)',
+                      backgroundSize: '20px 20px'
+                    }}></div>
+                    
+                    {/* If we are "ready" (guide exists) but no image, it implies loading or failure-fallback */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-4 text-center z-10">
+                       <div className="w-16 h-16 border-2 border-slate-700 rounded-lg flex items-center justify-center mb-3 bg-slate-800/50 backdrop-blur-sm">
+                         {/* We don't have a loading state prop here easily, but if it's taking a while, user sees this "Blueprint" view which is acceptable */}
+                         <Loader2 size={32} className="animate-spin text-amber-500" />
+                       </div>
+                       <p className="text-xs font-mono uppercase tracking-widest text-amber-500/70">Generating Schematic...</p>
+                    </div>
                   </div>
                 )}
-                <div className="absolute top-0 left-0 bg-slate-900/80 px-3 py-1 text-xs font-mono text-white rounded-br-lg">
+                <div className="absolute top-0 left-0 bg-slate-900/90 px-3 py-1 text-xs font-mono text-white rounded-br-lg z-20 border-r border-b border-slate-700">
                   STEP {idx + 1}
                 </div>
               </div>

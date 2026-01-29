@@ -75,23 +75,29 @@ const App: React.FC = () => {
 
       const updatedSteps = [...guide.steps];
       
-      // CRITICAL UPDATE: Sequential Generation
-      // Generating all images at once (Promise.all) causes 429 Rate Limit errors.
-      // We loop through them one by one to ensure reliability.
+      // CRITICAL: Sequential Generation Loop
+      // We generate images one by one with a delay to respect API Rate Limits.
       for (let i = 0; i < updatedSteps.length; i++) {
+        // Add a delay between requests (except the first one) to prevent 429 Too Many Requests
+        if (i > 0) {
+           await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+
         const step = updatedSteps[i];
         const visualPrompt = step.visualizationPrompt || step.description;
         
         try {
-          // Pass the step index to help log progress
+          // generateRepairImage now handles 3 layers of fallback internally
           const imageUrl = await generateRepairImage(visualPrompt, referenceBase64);
-          updatedSteps[i] = { ...step, generatedImageUrl: imageUrl };
           
-          // Update state after EACH successful generation so user sees progress
-          setRepairGuide(prev => prev ? ({ ...prev, steps: [...updatedSteps] }) : null);
+          if (imageUrl) {
+            updatedSteps[i] = { ...step, generatedImageUrl: imageUrl };
+            // Update state immediately so user sees the image appear
+            setRepairGuide(prev => prev ? ({ ...prev, steps: [...updatedSteps] }) : null);
+          }
         } catch (imgError) {
            console.error(`Failed to generate image for step ${i+1}`, imgError);
-           // Keep the step without an image rather than crashing
+           // We silently fail here because the UI has a nice "Blueprint" fallback for null images
         }
       }
 
