@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { RepairGuide } from '../types';
-import { Play, Download, Share2, Wrench, AlertTriangle, Volume2, Loader2, MessageSquare, Compass, PenTool } from 'lucide-react';
+import { Play, Share2, Wrench, AlertTriangle, Volume2, Loader2, MessageSquare } from 'lucide-react';
 import { PresentationMode } from './PresentationMode';
 import { generateStepAudio } from '../services/geminiService';
 
@@ -8,9 +9,10 @@ interface RepairGuideViewProps {
   guide: RepairGuide;
   onReset: () => void;
   onOpenChat: () => void;
+  isGenerating?: boolean;
 }
 
-export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset, onOpenChat }) => {
+export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset, onOpenChat, isGenerating }) => {
   const [showPresentation, setShowPresentation] = useState(false);
   const [loadingAudioStep, setLoadingAudioStep] = useState<number | null>(null);
   const [playingAudioStep, setPlayingAudioStep] = useState<number | null>(null);
@@ -47,7 +49,9 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
       <div className="mb-12 text-center space-y-4">
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-400 rounded-full border border-amber-500/20 mb-4">
           <Wrench size={16} />
-          <span className="font-mono text-sm uppercase tracking-wider">Engineering Solution Ready</span>
+          <span className="font-mono text-sm uppercase tracking-wider">
+            {isGenerating ? "Visualizing Schematics..." : "Engineering Solution Ready"}
+          </span>
         </div>
         <h1 className="text-4xl md:text-5xl font-bold font-display text-white">{guide.title}</h1>
         <p className="text-xl text-slate-400 max-w-2xl mx-auto">{guide.summary}</p>
@@ -96,7 +100,6 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
                 {step.generatedImageUrl ? (
                    <img src={step.generatedImageUrl} alt={step.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 ) : (
-                  // If image is missing (either still loading OR failed and returned null)
                   <div className="w-full h-full relative">
                     {/* Blueprint Pattern Background */}
                     <div className="absolute inset-0 bg-[#0f172a]" style={{
@@ -104,13 +107,17 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
                       backgroundSize: '20px 20px'
                     }}></div>
                     
-                    {/* If we are "ready" (guide exists) but no image, it implies loading or failure-fallback */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-4 text-center z-10">
                        <div className="w-16 h-16 border-2 border-slate-700 rounded-lg flex items-center justify-center mb-3 bg-slate-800/50 backdrop-blur-sm">
-                         {/* We don't have a loading state prop here easily, but if it's taking a while, user sees this "Blueprint" view which is acceptable */}
-                         <Loader2 size={32} className="animate-spin text-amber-500" />
+                         {isGenerating ? (
+                           <Loader2 size={32} className="animate-spin text-amber-500" />
+                         ) : (
+                           <Wrench size={32} className="text-slate-700" />
+                         )}
                        </div>
-                       <p className="text-xs font-mono uppercase tracking-widest text-amber-500/70">Generating Schematic...</p>
+                       <p className="text-xs font-mono uppercase tracking-widest text-amber-500/70">
+                         {isGenerating ? "Generating Schematic..." : "Schematic Offline"}
+                       </p>
                     </div>
                   </div>
                 )}

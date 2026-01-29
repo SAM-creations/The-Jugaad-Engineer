@@ -37,39 +37,49 @@ const App: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      // BRAIN 1: Think and Plan
+      // STEP 1: Think and Plan (Gemini 3 Flash Thinking)
       const guide = await analyzeRepairScenario(brokenImage, scrapImage);
       setRepairGuide(guide);
       
-      // Move to next state to show steps with placeholders while images generate
+      // Move to state where UI shows instructions while images load
       setAppState(AppState.GENERATING_IMAGES);
 
-      // BRAIN 2: Visualize (Parallel Execution)
+      // STEP 2: Visualize (Gemini 2.5 Flash Image)
+      // Process images SEQUENTIALLY to avoid 429 Rate Limit errors
       const referenceBase64 = await fileToGenerativePart(brokenImage);
       
-      const imagePromises = guide.steps.map(async (step, index) => {
+      for (let i = 0; i < guide.steps.length; i++) {
+        const step = guide.steps[i];
+        console.log(`Generating image for Step ${i + 1}...`);
+        
         try {
           const imageUrl = await generateRepairImage(step.visualizationPrompt, referenceBase64);
+          
           if (imageUrl) {
             setRepairGuide(prev => {
               if (!prev) return null;
               const newSteps = [...prev.steps];
-              newSteps[index] = { ...newSteps[index], generatedImageUrl: imageUrl };
+              newSteps[i] = { ...newSteps[i], generatedImageUrl: imageUrl };
               return { ...prev, steps: newSteps };
             });
           }
-        } catch (imgError) {
-          console.error(`Step ${index} visualization failed:`, imgError);
-        }
-      });
 
-      await Promise.all(imagePromises);
+          // Small delay between requests to be kind to the rate limiter
+          if (i < guide.steps.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          }
+        } catch (imgError) {
+          console.error(`Step ${i + 1} visualization failed:`, imgError);
+          // We continue to the next image even if one fails
+        }
+      }
+
       setAppState(AppState.READY);
 
     } catch (error: any) {
       console.error("App Error:", error);
       setAppState(AppState.ERROR);
-      setErrorMessage(error.message || "Failed to synchronize the engineering brains.");
+      setErrorMessage(error.message || "Failed to synchronize the engineering brains. Please check your API usage limits.");
     }
   };
 
@@ -149,7 +159,12 @@ const App: React.FC = () => {
         )}
 
         {(appState === AppState.GENERATING_IMAGES || appState === AppState.READY) && repairGuide && (
-           <RepairGuideView guide={repairGuide} onReset={resetApp} onOpenChat={() => setIsChatOpen(true)} />
+           <RepairGuideView 
+             guide={repairGuide} 
+             onReset={resetApp} 
+             onOpenChat={() => setIsChatOpen(true)} 
+             isGenerating={appState === AppState.GENERATING_IMAGES}
+           />
         )}
       </main>
 
