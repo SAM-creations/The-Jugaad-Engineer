@@ -174,7 +174,7 @@ export const generateRepairImage = async (
         contents: {
           parts: [
             { inlineData: { mimeType: "image/jpeg", data: referenceImageBase64 } },
-            { text: `Create a photorealistic instructional image. Action: ${prompt}. Style: Repair manual photography, hands visible working.` }
+            { text: `Create a photorealistic, cinematic instructional image. Action: ${prompt}. Style: Professional repair manual photography, clear focus, workshop lighting, hands visible working, high resolution.` }
           ]
         }
       });
@@ -182,18 +182,19 @@ export const generateRepairImage = async (
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
     } catch (e) {
-      console.warn("Brain 2: Photorealistic attempt failed, switching to Blueprint mode.", e);
+      console.warn("Brain 2: Photorealistic attempt failed (safety or other), switching to Blueprint mode.", e);
     }
   }
 
   // ATTEMPT 2: Technical Illustration (Blueprint) - No Reference Image
   // This is the safety net. It almost always works because it doesn't use the "unsafe" user image.
+  // It uses a distinct aesthetic (Blue/White Blueprint) so it looks intentional, not like a mistake.
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image', 
       contents: {
         parts: [
-          { text: `Draw a technical blueprint illustration style image. Subject: ${prompt}. Style: Clean vector art, engineering schematic, blue or white background, high contrast.` }
+          { text: `Create a high-quality technical blueprint illustration. Subject: ${prompt}. Style: Engineering schematic, vector art style, white lines on technical blue background, exploded view if necessary, very detailed and precise.` }
         ]
       }
     });

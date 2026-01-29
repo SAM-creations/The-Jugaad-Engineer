@@ -5,9 +5,32 @@ import { RepairGuideView } from './components/RepairGuideView';
 import { ChatDrawer } from './components/ChatDrawer';
 import { analyzeRepairScenario, generateRepairImage, fileToGenerativePart } from './services/geminiService';
 import { AppState, RepairGuide } from './types';
-import { Wrench, Zap, AlertCircle, MessageSquare } from 'lucide-react';
+import { Wrench, Zap, AlertCircle, MessageSquare, KeyRound } from 'lucide-react';
 
 const App: React.FC = () => {
+  // --- SAFETY CHECK: Ensure Developer Key is Present ---
+  if (!process.env.API_KEY) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400 p-8 font-sans">
+        <div className="max-w-md text-center space-y-6">
+          <div className="w-20 h-20 bg-amber-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+             <KeyRound size={40} className="text-amber-500" />
+          </div>
+          <h1 className="text-3xl font-bold text-white font-display">Setup Required</h1>
+          <div className="bg-slate-800 p-6 rounded-xl text-left space-y-4 border border-slate-700">
+            <p className="text-slate-300">The application is missing the <code>API_KEY</code> environment variable.</p>
+            <p className="text-sm text-slate-500">
+              To make this app public (No Login Required), add your Gemini API Key to your Vercel Project Settings or local <code>.env</code> file.
+            </p>
+            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono text-xs text-green-400 overflow-x-auto">
+              API_KEY=AIzaSy...
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [brokenImage, setBrokenImage] = useState<File | null>(null);
   const [scrapImage, setScrapImage] = useState<File | null>(null);
@@ -199,6 +222,17 @@ const App: React.FC = () => {
             />
         )}
       </main>
+
+      {/* Floating Action Button for Chat - Always Accessible when guide is present */}
+      {repairGuide && !isChatOpen && (
+        <button
+          onClick={() => setIsChatOpen(true)}
+          className="fixed bottom-6 right-6 p-4 bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-full shadow-2xl shadow-amber-500/20 z-50 transition-all hover:scale-110 flex items-center gap-3 font-bold animate-fadeIn group"
+        >
+          <MessageSquare size={24} className="group-hover:animate-pulse" />
+          <span className="hidden md:inline pr-1">Ask Engineer</span>
+        </button>
+      )}
 
       {/* Chat Drawer */}
       {repairGuide && (
