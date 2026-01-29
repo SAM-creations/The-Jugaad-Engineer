@@ -70,35 +70,33 @@ const App: React.FC = () => {
       // BRAIN 2: Visualization
       console.log("Activating Brain 2: Gemini 2.5 Flash Image...");
       
-      // Use the compressed/resized base64 for the reference image to keep it fast
       const referenceBase64 = await fileToGenerativePart(brokenImage);
-
       const updatedSteps = [...guide.steps];
       
-      // CRITICAL: Sequential Generation Loop
-      // We generate images one by one with a delay to respect API Rate Limits.
-      for (let i = 0; i < updatedSteps.length; i++) {
-        // Add a delay between requests (except the first one) to prevent 429 Too Many Requests
-        if (i > 0) {
-           await new Promise(resolve => setTimeout(resolve, 1500));
-        }
-
-        const step = updatedSteps[i];
-        const visualPrompt = step.visualizationPrompt || step.description;
+      // SPEED OPTIMIZATION: Concurrent Batch Processing
+      // Instead of waiting 1-by-1, we process in batches of 2.
+      // This doubles the speed while preventing 429 Rate Limits.
+      const BATCH_SIZE = 2;
+      
+      for (let i = 0; i < updatedSteps.length; i += BATCH_SIZE) {
+        const batch = updatedSteps.slice(i, i + BATCH_SIZE);
         
-        try {
-          // generateRepairImage now handles 3 layers of fallback internally
-          const imageUrl = await generateRepairImage(visualPrompt, referenceBase64);
+        // Process this batch in parallel
+        await Promise.all(batch.map(async (step, batchIndex) => {
+          const globalIndex = i + batchIndex;
+          const visualPrompt = step.visualizationPrompt || step.description;
           
-          if (imageUrl) {
-            updatedSteps[i] = { ...step, generatedImageUrl: imageUrl };
-            // Update state immediately so user sees the image appear
-            setRepairGuide(prev => prev ? ({ ...prev, steps: [...updatedSteps] }) : null);
+          try {
+            const imageUrl = await generateRepairImage(visualPrompt, referenceBase64);
+            if (imageUrl) {
+              updatedSteps[globalIndex] = { ...step, generatedImageUrl: imageUrl };
+              // Update state immediately as each batch finishes
+              setRepairGuide(prev => prev ? ({ ...prev, steps: [...updatedSteps] }) : null);
+            }
+          } catch (imgError) {
+             console.error(`Failed to generate image for step ${globalIndex}`, imgError);
           }
-        } catch (imgError) {
-           console.error(`Failed to generate image for step ${i+1}`, imgError);
-           // We silently fail here because the UI has a nice "Blueprint" fallback for null images
-        }
+        }));
       }
 
       setAppState(AppState.READY);

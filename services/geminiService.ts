@@ -1,11 +1,9 @@
-import { GoogleGenAI, Type, Modality, Chat } from "@google/genai";
+import { GoogleGenAI, Type, Modality, Chat, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { RepairGuide } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- UTILITIES ---
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const fileToGenerativePart = async (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -17,7 +15,8 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
         let width = img.width;
         let height = img.height;
         
-        const MAX_SIZE = 1024; // Reduced to 1024 for faster/safer processing
+        // OPTIMIZED: 800px is perfect for Gemini Vision and much faster to upload/process than 1024+
+        const MAX_SIZE = 800; 
 
         if (width > height) {
           if (width > MAX_SIZE) {
@@ -40,6 +39,7 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
         }
         ctx.drawImage(img, 0, 0, width, height);
         
+        // JPEG Quality 0.8 is sufficient for AI analysis
         const dataUrl = canvas.toDataURL('image/jpeg', 0.8); 
         resolve(dataUrl.split(',')[1]);
       };
@@ -70,6 +70,17 @@ const decodeAudioData = async (
   }
   return buffer;
 };
+
+// --- SAFETY SETTINGS ---
+// CRITICAL: Broken items often trigger "Harm" or "Dangerous" filters erroneously.
+// We set thresholds to BLOCK_ONLY_HIGH to ensure the repair guide is generated 
+// even if the image looks "messy" (which broken things are).
+const SAFETY_SETTINGS = [
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+];
 
 // --- BRAIN 1: THE ANALYST ---
 
@@ -134,7 +145,8 @@ export const analyzeRepairScenario = async (
         thinkingConfig: { thinkingBudget: 2048 }, 
         maxOutputTokens: 8192,
         responseMimeType: 'application/json',
-        responseSchema: commonSchema
+        responseSchema: commonSchema,
+        safetySettings: SAFETY_SETTINGS
       }
     });
 
@@ -150,7 +162,8 @@ export const analyzeRepairScenario = async (
       contents: { parts: imageParts },
       config: {
         responseMimeType: 'application/json',
-        responseSchema: commonSchema
+        responseSchema: commonSchema,
+        safetySettings: SAFETY_SETTINGS
       }
     });
 
@@ -173,7 +186,7 @@ export const generateRepairImage = async (
   const safePrompt = prompt.replace(/broken|damage|shatter|blood|hurt|injury/gi, "repair");
 
   // ATTEMPT 1: Photorealistic with Reference
-  // We use the user's image. If the user's image is flagged as "unsafe" (common for broken things), this throws an error.
+  // We use the user's image with BLOCK_ONLY_HIGH settings to allow more "messy" repair images.
   if (referenceImageBase64) {
     try {
       console.log("Brain 2: Generating photorealistic image (Attempt 1)...");
@@ -182,9 +195,10 @@ export const generateRepairImage = async (
         contents: {
           parts: [
             { inlineData: { mimeType: "image/jpeg", data: referenceImageBase64 } },
-            { text: `Create a professional instructional photo. Action: ${safePrompt}. Style: Bright workshop lighting, hands working, close-up, high definition.` }
+            { text: `Create a professional instructional photo. Action: ${safePrompt}. Style: Bright workshop lighting, hands working, close-up, high definition. Maintain the look of the object in the image.` }
           ]
-        }
+        },
+        config: { safetySettings: SAFETY_SETTINGS }
       });
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
@@ -196,17 +210,17 @@ export const generateRepairImage = async (
 
   // ATTEMPT 2: Blueprint Mode (TEXT ONLY)
   // CRITICAL: We DROP the reference image here. This avoids safety filters triggered by the "broken" object image.
-  // We rely 100% on the prompt to generate a clean blueprint.
-  await delay(1000); // Cool down for 1s
+  // No delay - execute immediately if attempt 1 fails.
   try {
     console.log("Brain 2: Generating blueprint (Attempt 2)...");
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image', 
       contents: {
         parts: [
-          { text: `Create a technical blueprint schematic. Subject: ${safePrompt}. Style: White lines on technical blue background, vector art, engineering diagram, clear, precise, no text.` }
+          { text: `Create a technical blueprint schematic. Subject: ${safePrompt}. Style: White lines on technical blue background, vector art, engineering diagram, clear, precise, no text. Neon cyan accents.` }
         ]
-      }
+      },
+      config: { safetySettings: SAFETY_SETTINGS }
     });
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
@@ -217,7 +231,6 @@ export const generateRepairImage = async (
 
   // ATTEMPT 3: Minimalist Icon (Safe Fallback)
   // Absolute simplest prompt to guarantee a visual.
-  await delay(1000); // Cool down for 1s
   try {
     console.log("Brain 2: Generating icon (Attempt 3)...");
     const response = await ai.models.generateContent({
@@ -226,7 +239,8 @@ export const generateRepairImage = async (
         parts: [
           { text: `A simple flat vector icon of a wrench and gear on a dark blue background.` }
         ]
-      }
+      },
+      config: { safetySettings: SAFETY_SETTINGS }
     });
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
@@ -235,7 +249,6 @@ export const generateRepairImage = async (
      console.error("Brain 2: All visualization attempts failed.", error);
   }
 
-  // Return null so the UI can show the CSS Blueprint fallback instead of a broken image
   return null;
 };
 
