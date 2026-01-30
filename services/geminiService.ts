@@ -165,7 +165,7 @@ export const generateRepairImage = async (prompt: string, apiKey: string): Promi
       model: 'gemini-2.5-flash-image',
       contents: { parts: [{ text: safePrompt }] },
       config: {
-        imageConfig: { aspectRatio: "16:9" }, // Standard video/image ratio
+        imageConfig: { aspectRatio: "16:9" }, // Standard image ratio
         safetySettings: RELAXED_SAFETY
       }
     });

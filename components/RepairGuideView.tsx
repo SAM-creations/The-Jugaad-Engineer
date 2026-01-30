@@ -36,7 +36,7 @@ const StepVisualizer: React.FC<{ step: RepairStep, index: number, apiKey: string
     let isMounted = true;
     const fetchImage = async () => {
       // Small delay based on index to stagger requests slightly so we don't hammer the API all at once
-      await new Promise(r => setTimeout(r, index * 1000));
+      await new Promise(r => setTimeout(r, index * 1200));
       
       if (!isMounted) return;
       
@@ -57,52 +57,59 @@ const StepVisualizer: React.FC<{ step: RepairStep, index: number, apiKey: string
   }, [step.visualizationPrompt, index, apiKey]);
 
   return (
-    <div className="md:w-1/3 h-64 md:h-auto bg-[#0f172a] relative overflow-hidden flex items-center justify-center border-b md:border-b-0 md:border-r border-slate-700 transition-all duration-500">
+    <div className="md:w-1/3 h-64 md:h-auto bg-[#0f172a] relative overflow-hidden flex items-center justify-center border-b md:border-b-0 md:border-r border-slate-700 transition-all duration-500 group-hover:border-slate-600">
         
-        {/* BACKGROUND LAYER */}
+        {/* BACKGROUND PATTERN FOR SCHEMATIC MODE */}
         {!imageUrl && (
-          <>
-             <div className="absolute inset-0 opacity-20" style={{
-                backgroundImage: 'linear-gradient(#3b82f6 1px, transparent 1px), linear-gradient(90deg, #3b82f6 1px, transparent 1px)',
-                backgroundSize: '20px 20px'
-             }}></div>
-             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent opacity-50"></div>
-          </>
+          <div className="absolute inset-0" style={{
+                backgroundImage: 'radial-gradient(circle, #334155 1px, transparent 1px)',
+                backgroundSize: '20px 20px',
+                opacity: 0.3
+          }}></div>
         )}
 
         {/* CONTENT LAYER */}
         {imageUrl ? (
-          <div className="relative w-full h-full group">
+          <div className="relative w-full h-full group-image">
             <img src={imageUrl} alt={step.title} className="w-full h-full object-cover animate-fadeIn" />
-            <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
-            <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/60 backdrop-blur rounded text-[10px] text-white/80 font-mono">
-              AI GENERATED
+            <div className="absolute inset-0 bg-black/10 group-image-hover:bg-transparent transition-colors"></div>
+            <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/60 backdrop-blur rounded text-[10px] text-white/80 font-mono flex items-center gap-1">
+              <Sparkles size={10} className="text-amber-400" /> AI VISUALIZATION
             </div>
           </div>
         ) : (
-          <div className="relative z-10 flex flex-col items-center animate-fadeIn">
-            <div className="w-24 h-24 rounded-full border-4 border-slate-700 bg-slate-800 flex items-center justify-center mb-2 shadow-2xl relative">
-              <Icon size={48} className="text-blue-400" strokeWidth={1.5} />
-              
-              {/* Loading Indicator */}
-              {loadingImage && (
-                 <div className="absolute inset-0 rounded-full border-4 border-amber-500/50 border-t-transparent animate-spin"></div>
+          <div className="relative z-10 flex flex-col items-center animate-fadeIn text-center p-4">
+            <div className="w-20 h-20 rounded-2xl border-2 border-slate-700 bg-slate-800/80 flex items-center justify-center mb-3 shadow-2xl relative overflow-hidden backdrop-blur-sm">
+               {/* Subtle scanning effect */}
+               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-500/10 to-transparent translate-y-[-100%] animate-scan"></div>
+               <Icon size={40} className="text-slate-500" strokeWidth={1.5} />
+            </div>
+            
+            <div className="flex flex-col items-center">
+              <span className="text-slate-500 font-mono text-xs uppercase tracking-widest mb-1.5 font-bold">Blueprint Mode</span>
+              {loadingImage ? (
+                 <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
+                    <Loader2 size={10} className="animate-spin text-amber-500" /> 
+                    <span className="text-[10px] text-amber-500 font-bold tracking-wide">RENDERING...</span>
+                 </div>
+              ) : (
+                <span className="text-[10px] text-slate-600">Image unavailable</span>
               )}
             </div>
-            <div className="px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded text-blue-300 text-xs font-mono uppercase tracking-widest flex items-center gap-2">
-               {loadingImage ? (
-                 <>
-                   <Loader2 size={10} className="animate-spin" /> Generating Visual...
-                 </>
-               ) : (
-                 <>Action: {step.actionType}</>
-               )}
-            </div>
+            <style>{`
+              @keyframes scan {
+                0% { transform: translateY(-100%); }
+                100% { transform: translateY(100%); }
+              }
+              .animate-scan {
+                animation: scan 2s linear infinite;
+              }
+            `}</style>
           </div>
         )}
 
-        <div className="absolute top-0 left-0 bg-amber-500 text-slate-900 px-3 py-1 text-sm font-bold font-mono rounded-br-lg z-20 shadow-lg">
-          STEP {index + 1}
+        <div className="absolute top-0 left-0 bg-slate-800/90 backdrop-blur text-slate-400 border-r border-b border-slate-700 px-3 py-1 text-xs font-bold font-mono rounded-br-lg z-20">
+          STEP {String(index + 1).padStart(2, '0')}
         </div>
     </div>
   );
@@ -146,7 +153,7 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-400 rounded-full border border-blue-500/20 mb-4">
           <ImageIcon size={16} />
           <span className="font-mono text-sm uppercase tracking-wider">
-            Visual Guide Ready
+            Hybrid Mode Active
           </span>
         </div>
         <h1 className="text-4xl md:text-5xl font-bold font-display text-white">{guide.title}</h1>
