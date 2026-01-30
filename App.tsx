@@ -61,9 +61,12 @@ const App: React.FC = () => {
   };
 
   const getEffectiveKey = () => {
-    // Priority: 1. User Custom Key, 2. Env Key
+    // Priority: 1. User Custom Key, 2. Hardcoded Key
     if (userApiKey && userApiKey.length > 10) return userApiKey;
-    return process.env.API_KEY || "";
+    
+    // HARDCODED KEY FOR HACKATHON SUBMISSION
+    // This bypasses Vercel env variable issues
+    return "AIzaSyBErOAfdk2UQ-NIcrrCaO3c1x3pADGzfPg";
   };
 
   const startAnalysis = async () => {
