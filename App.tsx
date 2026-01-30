@@ -37,21 +37,14 @@ const App: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      // STEP 1: Think and Plan (Gemini 3 Flash Thinking)
       const guide = await analyzeRepairScenario(brokenImage, scrapImage);
       setRepairGuide(guide);
-      
-      // Move to state where UI shows instructions while images load
       setAppState(AppState.GENERATING_IMAGES);
 
-      // STEP 2: Visualize (Gemini 2.5 Flash Image)
-      // Process images SEQUENTIALLY to avoid 429 Rate Limit errors
       const referenceBase64 = await fileToGenerativePart(brokenImage);
       
       for (let i = 0; i < guide.steps.length; i++) {
         const step = guide.steps[i];
-        console.log(`Generating image for Step ${i + 1}...`);
-        
         try {
           const imageUrl = await generateRepairImage(step.visualizationPrompt, referenceBase64);
           
@@ -64,13 +57,12 @@ const App: React.FC = () => {
             });
           }
 
-          // Small delay between requests to be kind to the rate limiter
           if (i < guide.steps.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Increased delay to 2 seconds for better stability
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         } catch (imgError) {
           console.error(`Step ${i + 1} visualization failed:`, imgError);
-          // We continue to the next image even if one fails
         }
       }
 
@@ -79,7 +71,7 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error("App Error:", error);
       setAppState(AppState.ERROR);
-      setErrorMessage(error.message || "Failed to synchronize the engineering brains. Please check your API usage limits.");
+      setErrorMessage(error.message || "Engineers are busy. Please check your API limits or try a different image.");
     }
   };
 
@@ -126,7 +118,7 @@ const App: React.FC = () => {
               <h1 className="text-5xl md:text-7xl font-bold font-display leading-tight">
                 Engineering <span className="text-amber-500">Jugaad.</span>
               </h1>
-              <p className="text-xl text-slate-400">Powered by Gemini 3 Flash Thinking & Vision</p>
+              <p className="text-xl text-slate-400 text-balance">The Master AI Agent for Frugal Repair & Resourcefulness</p>
             </div>
 
             {appState === AppState.ERROR && (
@@ -153,7 +145,7 @@ const App: React.FC = () => {
             </div>
             
             <div className="mt-16 text-center text-slate-500 text-xs uppercase tracking-widest font-mono">
-              Synchronizing Dual-Brain Flash Engine (Thinking Mode Active)
+              Ready to synchronize dual-brain logic
             </div>
           </div>
         )}
