@@ -14,6 +14,18 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     build: {
       outDir: 'dist',
+      // Fixes the "Some chunks are larger than 500 kB" warning
+      chunkSizeWarningLimit: 1000, 
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // Split code into separate chunks for better performance and caching
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-genai': ['@google/genai'],
+            'vendor-ui': ['lucide-react']
+          }
+        }
+      }
     },
     define: {
       // This allows 'process.env.API_KEY' to work in the browser code
