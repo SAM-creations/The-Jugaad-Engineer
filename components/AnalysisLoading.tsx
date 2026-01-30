@@ -1,21 +1,22 @@
+
 import React, { useEffect, useState } from 'react';
 import { BrainCircuit, Hammer, Search, Lightbulb } from 'lucide-react';
 
 const STEPS = [
-  { icon: Search, text: "Scanning scrap pile for materials..." },
-  { icon: BrainCircuit, text: "Identifying failure points..." },
-  { icon: Hammer, text: "Simulating physics repairs..." },
-  { icon: Lightbulb, text: "Generating repair visualizations..." },
+  { icon: Search, text: "Rapid scan of materials..." },
+  { icon: BrainCircuit, text: "Calculating quick fix..." },
+  { icon: Hammer, text: "Finalizing blueprint..." },
+  { icon: Lightbulb, text: "Readying solution..." },
 ];
 
 export const AnalysisLoading: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
-    // Speed up the animation loop to match the faster API response time
+    // Fast cycle for the "under 15s" feel
     const interval = setInterval(() => {
       setCurrentStep((prev) => (prev + 1) % STEPS.length);
-    }, 800);
+    }, 600);
     return () => clearInterval(interval);
   }, []);
 
@@ -27,18 +28,17 @@ export const AnalysisLoading: React.FC = () => {
           <BrainCircuit size={80} className="text-amber-400 animate-bounce relative z-10" />
         </div>
         
-        <h2 className="text-3xl font-bold font-display text-white mb-8">The Jugaad Engineer is Thinking</h2>
+        <h2 className="text-3xl font-bold font-display text-white mb-8">Engineering Solution...</h2>
         
         <div className="space-y-6 text-left pl-8 border-l-2 border-slate-700">
           {STEPS.map((step, idx) => {
             const Icon = step.icon;
             const isActive = idx === currentStep;
-            const isPast = idx < currentStep; // Actually we loop, so just highlight active
             
             return (
               <div 
                 key={idx} 
-                className={`flex items-center gap-4 transition-all duration-500 ${isActive ? 'translate-x-2 text-white scale-105' : 'text-slate-500 opacity-50'}`}
+                className={`flex items-center gap-4 transition-all duration-300 ${isActive ? 'translate-x-2 text-white scale-105' : 'text-slate-500 opacity-30'}`}
               >
                 <div className={`p-2 rounded-lg ${isActive ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800'}`}>
                   <Icon size={24} />
@@ -58,7 +58,7 @@ export const AnalysisLoading: React.FC = () => {
             100% { transform: scaleX(1); }
           }
           .animate-progress {
-            animation: progress 3s linear infinite;
+            animation: progress 2s linear infinite;
           }
         `}</style>
       </div>

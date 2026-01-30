@@ -1,9 +1,12 @@
 
+export type ActionType = 'CUT' | 'TIE' | 'HEAT' | 'GLUE' | 'ASSEMBLE' | 'SUPPORT' | 'MEASURE' | 'CLEAN' | 'GENERIC';
+
 export interface RepairStep {
   title: string;
   description: string;
   materialUsed: string;
   physicsPrinciple: string;
+  actionType: ActionType;
   visualizationPrompt: string;
   generatedImageUrl?: string;
   audioData?: ArrayBuffer;
@@ -20,7 +23,6 @@ export interface RepairGuide {
 export enum AppState {
   IDLE = 'IDLE',
   ANALYZING = 'ANALYZING',
-  GENERATING_IMAGES = 'GENERATING_IMAGES',
   READY = 'READY',
   ERROR = 'ERROR'
 }

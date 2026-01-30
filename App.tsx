@@ -4,9 +4,10 @@ import { ImageUploader } from './components/ImageUploader';
 import { AnalysisLoading } from './components/AnalysisLoading';
 import { RepairGuideView } from './components/RepairGuideView';
 import { ChatDrawer } from './components/ChatDrawer';
-import { analyzeRepairScenario, generateRepairImage } from './services/geminiService';
+import { analyzeRepairScenario } from './services/geminiService';
+import { DEMO_GUIDE } from './services/demoService';
 import { AppState, RepairGuide } from './types';
-import { Wrench, Zap, AlertCircle, MessageSquare } from 'lucide-react';
+import { Wrench, Zap, AlertCircle, MessageSquare, PlayCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
@@ -37,45 +38,35 @@ const App: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      // Step 1: Brain 1 Analysis
+      // Step 1: Brain 1 Analysis (Returns Action Types for Blueprint Mode)
       const guide = await analyzeRepairScenario(brokenImage, scrapImage);
       setRepairGuide(guide);
       
-      // Immediately show the text guide while images load
-      setAppState(AppState.GENERATING_IMAGES);
-
-      // Step 2: Brain 2 Visualization (Sequential for Stability)
-      for (let i = 0; i < guide.steps.length; i++) {
-        const step = guide.steps[i];
-        try {
-          // We DO NOT pass reference image here because 'broken' objects trigger safety filters
-          const imageUrl = await generateRepairImage(step.visualizationPrompt);
-          
-          if (imageUrl) {
-            setRepairGuide(prev => {
-              if (!prev) return null;
-              const newSteps = [...prev.steps];
-              newSteps[i] = { ...newSteps[i], generatedImageUrl: imageUrl };
-              return { ...prev, steps: newSteps };
-            });
-          }
-
-          // Small pause between images to avoid rate limits
-          if (i < guide.steps.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 2500));
-          }
-        } catch (imgError) {
-          console.error(`Step ${i + 1} visualization failed:`, imgError);
-        }
-      }
-
+      // BLUEPRINT MODE: Skip image generation. Go straight to Ready.
       setAppState(AppState.READY);
 
     } catch (error: any) {
       console.error("App Error:", error);
       setAppState(AppState.ERROR);
-      setErrorMessage(error.message || "The engineering logic failed. Please try a clearer photo or check your connection.");
+      
+      if (error.message?.includes('API key') || error.message?.includes('400') || error.message?.includes('403')) {
+         setErrorMessage("API Key Error: The provided key is expired or invalid. Please renew it.");
+      } else {
+         setErrorMessage(error.message || "The engineering logic failed. Please try a clearer photo or check your connection.");
+      }
     }
+  };
+
+  const runDemoSimulation = async () => {
+    setAppState(AppState.ANALYZING);
+    setErrorMessage(null);
+    setRepairGuide(null);
+    
+    // Simulate Analysis Time
+    await new Promise(resolve => setTimeout(resolve, 2500));
+
+    setRepairGuide(DEMO_GUIDE);
+    setAppState(AppState.READY);
   };
 
   const resetApp = () => {
@@ -93,7 +84,7 @@ const App: React.FC = () => {
 
       <nav className="border-b border-slate-800 bg-slate-950/50 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={resetApp}>
             <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
               <Wrench size={18} className="text-slate-900" />
             </div>
@@ -110,6 +101,14 @@ const App: React.FC = () => {
                  <span>ASK ENGINEER</span>
                </button>
              )}
+             {appState === AppState.IDLE && (
+                 <button 
+                  onClick={runDemoSimulation}
+                  className="text-xs font-mono text-slate-500 hover:text-amber-400 transition-colors border border-slate-800 hover:border-amber-500/50 px-3 py-1 rounded"
+                 >
+                   DEMO MODE
+                 </button>
+             )}
           </div>
         </div>
       </nav>
@@ -125,9 +124,21 @@ const App: React.FC = () => {
             </div>
 
             {appState === AppState.ERROR && (
-              <div className="mb-8 p-4 bg-red-500/10 border border-red-500/50 rounded-xl flex items-start gap-3">
-                <AlertCircle className="text-red-500 shrink-0 mt-1" />
-                <p className="text-slate-300 text-sm font-medium">{errorMessage}</p>
+              <div className="mb-8 p-6 bg-red-500/10 border border-red-500/50 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                    <AlertCircle className="text-red-500 shrink-0 mt-1" />
+                    <div>
+                        <p className="text-slate-300 text-sm font-medium">{errorMessage}</p>
+                        <p className="text-slate-500 text-xs mt-1">Don't worry, you can still present your project using the Simulation Mode.</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={runDemoSimulation}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg transition-all border border-slate-600 hover:border-amber-500 hover:text-amber-400 whitespace-nowrap"
+                >
+                    <PlayCircle size={18} />
+                    Run Simulation
+                </button>
               </div>
             )}
 
@@ -136,7 +147,7 @@ const App: React.FC = () => {
               <ImageUploader label="The Scrap Pile" description="Photo of available materials" onImageSelected={handleScrapImage} previewUrl={scrapPreview} />
             </div>
 
-            <div className="mt-12 flex justify-center">
+            <div className="mt-12 flex flex-col items-center gap-4">
               <button
                 onClick={startAnalysis}
                 disabled={!brokenImage || !scrapImage}
@@ -145,20 +156,26 @@ const App: React.FC = () => {
                 <Zap size={24} fill="currentColor" />
                 <span>Launch Analysis</span>
               </button>
-            </div>
-            
-            <div className="mt-16 text-center text-slate-500 text-xs uppercase tracking-widest font-mono">
-              Ready to synchronize dual-brain logic
+              
+              {!brokenImage && !scrapImage && (
+                  <button 
+                    onClick={runDemoSimulation}
+                    className="flex items-center gap-2 text-slate-500 hover:text-amber-400 transition-colors text-sm font-medium mt-4"
+                  >
+                    <PlayCircle size={16} />
+                    <span>No photos? Simulate Demo Analysis</span>
+                  </button>
+              )}
             </div>
           </div>
         )}
 
-        {(appState === AppState.GENERATING_IMAGES || appState === AppState.READY) && repairGuide && (
+        {(appState === AppState.READY) && repairGuide && (
            <RepairGuideView 
              guide={repairGuide} 
              onReset={resetApp} 
              onOpenChat={() => setIsChatOpen(true)} 
-             isGenerating={appState === AppState.GENERATING_IMAGES}
+             isGenerating={false}
            />
         )}
       </main>
