@@ -9,6 +9,9 @@ import { DEMO_GUIDE } from './services/demoService';
 import { AppState, RepairGuide } from './types';
 import { Wrench, Zap, AlertCircle, MessageSquare, PlayCircle, KeyRound, X, Check, Save, RefreshCw, ChevronRight } from 'lucide-react';
 
+// YOUR HARDCODED KEY - Acts as the fallback default
+const DEFAULT_API_KEY = "AIzaSyBErOAfdk2UQ-NIcrrCaO3c1x3pADGzfPg";
+
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [brokenImage, setBrokenImage] = useState<File | null>(null);
@@ -60,13 +63,15 @@ const App: React.FC = () => {
     setErrorMessage(null);
   };
 
+  // CRITICAL: Logic to switch between Default Key and User Key
   const getEffectiveKey = () => {
-    // Priority: 1. User Custom Key, 2. Hardcoded Key
-    if (userApiKey && userApiKey.length > 10) return userApiKey;
+    // 1. If the user has entered a key, USE IT. It overrides everything.
+    if (userApiKey && userApiKey.trim().length > 10) {
+      return userApiKey.trim();
+    }
     
-    // HARDCODED KEY FOR HACKATHON SUBMISSION
-    // This bypasses Vercel env variable issues
-    return "AIzaSyBErOAfdk2UQ-NIcrrCaO3c1x3pADGzfPg";
+    // 2. Otherwise, use your hardcoded default key.
+    return DEFAULT_API_KEY;
   };
 
   const startAnalysis = async () => {
@@ -74,11 +79,10 @@ const App: React.FC = () => {
 
     const key = getEffectiveKey();
     
-    // Check if key looks valid
-    if (!key || key.includes("PASTE_YOUR") || key.length < 10) {
+    // Basic validation
+    if (!key || key.length < 10) {
       setAppState(AppState.ERROR);
-      setErrorMessage("Please configure your API Key to continue.");
-      // Automatically prompt for key if missing
+      setErrorMessage("Configuration Error: No valid API Key found.");
       setShowKeyModal(true);
       return;
     }
@@ -87,11 +91,11 @@ const App: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      // Step 1: Brain 1 Analysis (Returns Action Types for Blueprint Mode)
+      // Step 1: Brain 1 Analysis
+      // This will use whichever key is returned by getEffectiveKey()
       const guide = await analyzeRepairScenario(brokenImage, scrapImage, key);
       setRepairGuide(guide);
       
-      // BLUEPRINT MODE: Skip image generation here. The UI will handle Brain 2 calls in background.
       setAppState(AppState.READY);
 
     } catch (error: any) {
@@ -100,10 +104,13 @@ const App: React.FC = () => {
       
       const msg = error.message?.toLowerCase() || '';
       
+      // Smart Error Handling
       if (msg.includes('quota') || msg.includes('429')) {
-         setErrorMessage("⚠️ Global Quota Exceeded. Please add your own API Key to continue.");
+         setErrorMessage("⚠️ Global Quota Exceeded on Demo Key. Please add your own API Key to continue.");
+         setShowKeyModal(true); // Auto-prompt for key
       } else if (msg.includes('api key') || msg.includes('400') || msg.includes('403') || msg.includes('invalid')) {
          setErrorMessage("API Key Error: The provided key is invalid.");
+         setShowKeyModal(true);
       } else {
          setErrorMessage(error.message || "Network issue detected.");
       }

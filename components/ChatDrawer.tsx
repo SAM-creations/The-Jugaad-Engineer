@@ -19,11 +19,18 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ guide, isOpen, onClose, 
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const chatSessionRef = useRef<Chat | null>(null);
+  const currentKeyRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (guide && apiKey && !chatSessionRef.current) {
+    // We need to initialize IF:
+    // 1. Session doesn't exist
+    // 2. OR the API Key has changed (switched from default to user key)
+    const shouldInit = !chatSessionRef.current || (currentKeyRef.current !== apiKey);
+
+    if (guide && apiKey && shouldInit) {
       chatSessionRef.current = initChatSession(guide, apiKey);
+      currentKeyRef.current = apiKey; // Track the key used for this session
     }
   }, [guide, apiKey]);
 
