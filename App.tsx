@@ -7,7 +7,7 @@ import { ChatDrawer } from './components/ChatDrawer';
 import { analyzeRepairScenario } from './services/geminiService';
 import { DEMO_GUIDE } from './services/demoService';
 import { AppState, RepairGuide } from './types';
-import { Wrench, Zap, AlertCircle, MessageSquare, PlayCircle, RefreshCw } from 'lucide-react';
+import { Wrench, Zap, AlertCircle, MessageSquare, PlayCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
@@ -68,9 +68,9 @@ const App: React.FC = () => {
       const msg = error.message?.toLowerCase() || '';
       
       if (msg.includes('quota') || msg.includes('429')) {
-         setErrorMessage("⚠️ API QUOTA HIT! Rate limits usually reset in ~60 seconds. You can Retry Live or use Demo Mode.");
+         setErrorMessage("⚠️ API QUOTA HIT! Please switch to Demo Mode for the presentation.");
       } else if (msg.includes('api key') || msg.includes('400') || msg.includes('403') || msg.includes('invalid')) {
-         setErrorMessage("API Key Error: Check your .env file. The key is missing, invalid, or expired. Check console for details.");
+         setErrorMessage("API Key Error: Restart your terminal to load the new key from .env");
       } else {
          setErrorMessage(error.message || "Network issue detected. Switch to Demo Mode to continue presentation.");
       }
@@ -149,16 +149,11 @@ const App: React.FC = () => {
                     <AlertCircle className="text-red-500 shrink-0 mt-1" />
                     <div>
                         <p className="text-slate-200 text-lg font-bold">{errorMessage}</p>
-                        <p className="text-slate-400 text-sm mt-1">If you can't fix this, use Demo Mode.</p>
+                        <p className="text-slate-400 text-sm mt-1">Please try restarting your terminal if you just updated the API Key.</p>
                     </div>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                    <button 
-                        onClick={startAnalysis}
-                        className="px-4 py-3 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 border border-slate-700 hover:border-slate-500"
-                    >
-                        <RefreshCw size={18} /> Retry Live
-                    </button>
+                    {/* Retry Button Removed */}
                     <button 
                         onClick={runDemoSimulation}
                         className="flex items-center justify-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-xl transition-all shadow-lg shadow-amber-500/20 hover:scale-105 whitespace-nowrap"
