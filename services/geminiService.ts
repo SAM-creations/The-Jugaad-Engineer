@@ -2,8 +2,6 @@
 import { GoogleGenAI, Type, Modality, Chat, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { RepairGuide, ActionType } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 // --- UTILITIES ---
 
 export const fileToGenerativePart = async (file: File): Promise<string> => {
@@ -81,8 +79,10 @@ const RELAXED_SAFETY = [
 
 export const analyzeRepairScenario = async (
   brokenFile: File, 
-  scrapFile: File
+  scrapFile: File,
+  apiKey: string
 ): Promise<RepairGuide> => {
+  const ai = new GoogleGenAI({ apiKey });
   const brokenBase64 = await fileToGenerativePart(brokenFile);
   const scrapBase64 = await fileToGenerativePart(scrapFile);
 
@@ -153,7 +153,8 @@ export const analyzeRepairScenario = async (
 
 // --- BRAIN 2: THE ARTIST (Gemini 2.5 Flash Image) ---
 
-export const generateRepairImage = async (prompt: string): Promise<string | null> => {
+export const generateRepairImage = async (prompt: string, apiKey: string): Promise<string | null> => {
+  const ai = new GoogleGenAI({ apiKey });
   // Safe-guard the prompt to avoid safety filters on tools
   const safePrompt = prompt
     .replace(/blood|injury|weapon|violence/gi, "")
@@ -182,7 +183,8 @@ export const generateRepairImage = async (prompt: string): Promise<string | null
 };
 
 // --- TTS & CHAT ---
-export const generateStepAudio = async (text: string): Promise<AudioBuffer> => {
+export const generateStepAudio = async (text: string, apiKey: string): Promise<AudioBuffer> => {
+  const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text }] }],
@@ -198,7 +200,8 @@ export const generateStepAudio = async (text: string): Promise<AudioBuffer> => {
   return await decodeAudioData(base64Audio!, audioContext);
 };
 
-export const initChatSession = (guide: RepairGuide): Chat => {
+export const initChatSession = (guide: RepairGuide, apiKey: string): Chat => {
+  const ai = new GoogleGenAI({ apiKey });
   const guideContext = `
     CURRENT REPAIR PROJECT: ${guide.title}
     SUMMARY: ${guide.summary}

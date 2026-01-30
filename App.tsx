@@ -7,7 +7,7 @@ import { ChatDrawer } from './components/ChatDrawer';
 import { analyzeRepairScenario } from './services/geminiService';
 import { DEMO_GUIDE } from './services/demoService';
 import { AppState, RepairGuide } from './types';
-import { Wrench, Zap, AlertCircle, MessageSquare, PlayCircle } from 'lucide-react';
+import { Wrench, Zap, AlertCircle, MessageSquare, PlayCircle, KeyRound } from 'lucide-react';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
@@ -18,6 +18,9 @@ const App: React.FC = () => {
   const [repairGuide, setRepairGuide] = useState<RepairGuide | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  
+  // Manual key override state
+  const [manualKey, setManualKey] = useState("");
 
   const handleBrokenImage = (file: File | null) => {
     setBrokenImage(file);
@@ -31,22 +34,21 @@ const App: React.FC = () => {
     setErrorMessage(null);
   };
 
+  const getEffectiveKey = () => {
+    // Return manual key if present, otherwise try env vars
+    if (manualKey && manualKey.length > 10) return manualKey;
+    return process.env.API_KEY || "";
+  };
+
   const startAnalysis = async () => {
     if (!brokenImage || !scrapImage) return;
 
-    // DEBUGGING HELP: Check console to see if key is loaded
-    const key = process.env.API_KEY;
-    console.log("Analysis Start. API Key status:", key ? `Present (starts with ${key.substring(0,4)}...)` : "MISSING/UNDEFINED");
-
-    if (!key) {
+    const key = getEffectiveKey();
+    
+    // Check if key looks valid
+    if (!key || key.includes("PASTE_YOUR") || key.length < 10) {
       setAppState(AppState.ERROR);
-      setErrorMessage("MISSING API KEY: I created a .env file for you, but it is empty. Open '.env' and paste your key.");
-      return;
-    }
-
-    if (key.includes("PASTE_YOUR")) {
-      setAppState(AppState.ERROR);
-      setErrorMessage("PLACEHOLDER DETECTED: Open the .env file and replace 'PASTE_YOUR_GEMINI_API_KEY_HERE' with your actual key.");
+      setErrorMessage("Missing or invalid API Key. Please paste your key below.");
       return;
     }
 
@@ -55,7 +57,7 @@ const App: React.FC = () => {
 
     try {
       // Step 1: Brain 1 Analysis (Returns Action Types for Blueprint Mode)
-      const guide = await analyzeRepairScenario(brokenImage, scrapImage);
+      const guide = await analyzeRepairScenario(brokenImage, scrapImage, key);
       setRepairGuide(guide);
       
       // BLUEPRINT MODE: Skip image generation. Go straight to Ready.
@@ -68,11 +70,11 @@ const App: React.FC = () => {
       const msg = error.message?.toLowerCase() || '';
       
       if (msg.includes('quota') || msg.includes('429')) {
-         setErrorMessage("⚠️ API QUOTA HIT! Please switch to Demo Mode for the presentation.");
+         setErrorMessage("⚠️ API QUOTA HIT! Please switch to Demo Mode.");
       } else if (msg.includes('api key') || msg.includes('400') || msg.includes('403') || msg.includes('invalid')) {
-         setErrorMessage("API Key Error: Restart your terminal to load the new key from .env");
+         setErrorMessage("API Key Error: The key provided is invalid.");
       } else {
-         setErrorMessage(error.message || "Network issue detected. Switch to Demo Mode to continue presentation.");
+         setErrorMessage(error.message || "Network issue detected.");
       }
     }
   };
@@ -145,15 +147,32 @@ const App: React.FC = () => {
 
             {appState === AppState.ERROR && (
               <div className="mb-8 p-6 bg-red-500/10 border border-red-500/50 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 animate-bounce-subtle">
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 w-full md:w-auto">
                     <AlertCircle className="text-red-500 shrink-0 mt-1" />
-                    <div>
+                    <div className="w-full">
                         <p className="text-slate-200 text-lg font-bold">{errorMessage}</p>
-                        <p className="text-slate-400 text-sm mt-1">Please try restarting your terminal if you just updated the API Key.</p>
+                        <p className="text-slate-400 text-sm mt-1">Paste your API Key below to fix immediately:</p>
+                        <div className="flex gap-2 mt-2 w-full max-w-md">
+                           <div className="relative flex-1">
+                             <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                             <input 
+                               type="text" 
+                               value={manualKey}
+                               onChange={(e) => setManualKey(e.target.value)}
+                               placeholder="AIzaSy..."
+                               className="w-full bg-slate-900 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-sm text-white focus:border-amber-500 focus:outline-none"
+                             />
+                           </div>
+                           <button 
+                             onClick={startAnalysis}
+                             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-bold whitespace-nowrap"
+                           >
+                             Try Key
+                           </button>
+                        </div>
                     </div>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                    {/* Retry Button Removed */}
+                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto mt-4 md:mt-0">
                     <button 
                         onClick={runDemoSimulation}
                         className="flex items-center justify-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-xl transition-all shadow-lg shadow-amber-500/20 hover:scale-105 whitespace-nowrap"
@@ -199,11 +218,12 @@ const App: React.FC = () => {
              onReset={resetApp} 
              onOpenChat={() => setIsChatOpen(true)} 
              isGenerating={false}
+             apiKey={getEffectiveKey()}
            />
         )}
       </main>
 
-      {repairGuide && <ChatDrawer guide={repairGuide} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />}
+      {repairGuide && <ChatDrawer guide={repairGuide} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} apiKey={getEffectiveKey()} />}
     </div>
   );
 };

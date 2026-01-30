@@ -10,6 +10,7 @@ interface RepairGuideViewProps {
   onReset: () => void;
   onOpenChat: () => void;
   isGenerating?: boolean;
+  apiKey: string;
 }
 
 // Map action types to Lucide icons
@@ -26,7 +27,7 @@ const ActionIconMap: Record<ActionType, React.ElementType> = {
 };
 
 // --- Sub-component for individual step visualization ---
-const StepVisualizer: React.FC<{ step: RepairStep, index: number }> = ({ step, index }) => {
+const StepVisualizer: React.FC<{ step: RepairStep, index: number, apiKey: string }> = ({ step, index, apiKey }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loadingImage, setLoadingImage] = useState(true);
   const Icon = ActionIconMap[step.actionType] || Wrench;
@@ -40,7 +41,7 @@ const StepVisualizer: React.FC<{ step: RepairStep, index: number }> = ({ step, i
       if (!isMounted) return;
       
       try {
-        const url = await generateRepairImage(step.visualizationPrompt);
+        const url = await generateRepairImage(step.visualizationPrompt, apiKey);
         if (isMounted && url) {
           setImageUrl(url);
         }
@@ -53,7 +54,7 @@ const StepVisualizer: React.FC<{ step: RepairStep, index: number }> = ({ step, i
 
     fetchImage();
     return () => { isMounted = false; };
-  }, [step.visualizationPrompt, index]);
+  }, [step.visualizationPrompt, index, apiKey]);
 
   return (
     <div className="md:w-1/3 h-64 md:h-auto bg-[#0f172a] relative overflow-hidden flex items-center justify-center border-b md:border-b-0 md:border-r border-slate-700 transition-all duration-500">
@@ -107,7 +108,7 @@ const StepVisualizer: React.FC<{ step: RepairStep, index: number }> = ({ step, i
   );
 };
 
-export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset, onOpenChat }) => {
+export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset, onOpenChat, apiKey }) => {
   const [showPresentation, setShowPresentation] = useState(false);
   const [loadingAudioStep, setLoadingAudioStep] = useState<number | null>(null);
   const [playingAudioStep, setPlayingAudioStep] = useState<number | null>(null);
@@ -117,7 +118,7 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
     
     try {
       setLoadingAudioStep(index);
-      const audioBuffer = await generateStepAudio(text);
+      const audioBuffer = await generateStepAudio(text, apiKey);
       setLoadingAudioStep(null);
       setPlayingAudioStep(index);
 
@@ -193,7 +194,7 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
             <div key={idx} className="bg-slate-800 rounded-xl overflow-hidden flex flex-col md:flex-row border border-slate-700 hover:border-slate-600 transition-colors group shadow-lg">
               
               {/* Visualizer Component (Handles its own image loading) */}
-              <StepVisualizer step={step} index={idx} />
+              <StepVisualizer step={step} index={idx} apiKey={apiKey} />
 
               {/* Text Content */}
               <div className="p-6 md:w-2/3 flex flex-col justify-center">

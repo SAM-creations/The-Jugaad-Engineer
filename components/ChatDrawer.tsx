@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Bot, User, Loader2 } from 'lucide-react';
 import { RepairGuide, ChatMessage } from '../types';
@@ -8,9 +9,10 @@ interface ChatDrawerProps {
   guide: RepairGuide;
   isOpen: boolean;
   onClose: () => void;
+  apiKey: string;
 }
 
-export const ChatDrawer: React.FC<ChatDrawerProps> = ({ guide, isOpen, onClose }) => {
+export const ChatDrawer: React.FC<ChatDrawerProps> = ({ guide, isOpen, onClose, apiKey }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: '1', role: 'model', text: `Hi! I'm the Engineer. I've analyzed your ${guide.title}. Need clarification on any steps or physics principles?` }
   ]);
@@ -21,9 +23,9 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ guide, isOpen, onClose }
 
   useEffect(() => {
     if (guide && !chatSessionRef.current) {
-      chatSessionRef.current = initChatSession(guide);
+      chatSessionRef.current = initChatSession(guide, apiKey);
     }
-  }, [guide]);
+  }, [guide, apiKey]);
 
   useEffect(() => {
     if (scrollRef.current) {
