@@ -34,6 +34,22 @@ const App: React.FC = () => {
   const startAnalysis = async () => {
     if (!brokenImage || !scrapImage) return;
 
+    // DEBUGGING HELP: Check console to see if key is loaded
+    const key = process.env.API_KEY;
+    console.log("Analysis Start. API Key status:", key ? `Present (starts with ${key.substring(0,4)}...)` : "MISSING/UNDEFINED");
+
+    if (!key) {
+      setAppState(AppState.ERROR);
+      setErrorMessage("MISSING API KEY: I created a .env file for you, but it is empty. Open '.env' and paste your key.");
+      return;
+    }
+
+    if (key.includes("PASTE_YOUR")) {
+      setAppState(AppState.ERROR);
+      setErrorMessage("PLACEHOLDER DETECTED: Open the .env file and replace 'PASTE_YOUR_GEMINI_API_KEY_HERE' with your actual key.");
+      return;
+    }
+
     setAppState(AppState.ANALYZING);
     setErrorMessage(null);
 
@@ -53,8 +69,8 @@ const App: React.FC = () => {
       
       if (msg.includes('quota') || msg.includes('429')) {
          setErrorMessage("⚠️ API QUOTA HIT! Rate limits usually reset in ~60 seconds. You can Retry Live or use Demo Mode.");
-      } else if (msg.includes('api key') || msg.includes('400') || msg.includes('403')) {
-         setErrorMessage("API Key Error: The provided key is expired or invalid. Switch to Demo Mode.");
+      } else if (msg.includes('api key') || msg.includes('400') || msg.includes('403') || msg.includes('invalid')) {
+         setErrorMessage("API Key Error: Check your .env file. The key is missing, invalid, or expired. Check console for details.");
       } else {
          setErrorMessage(error.message || "Network issue detected. Switch to Demo Mode to continue presentation.");
       }
@@ -133,7 +149,7 @@ const App: React.FC = () => {
                     <AlertCircle className="text-red-500 shrink-0 mt-1" />
                     <div>
                         <p className="text-slate-200 text-lg font-bold">{errorMessage}</p>
-                        <p className="text-slate-400 text-sm mt-1">This is usually temporary. Wait 1 min, then click Retry.</p>
+                        <p className="text-slate-400 text-sm mt-1">If you can't fix this, use Demo Mode.</p>
                     </div>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
