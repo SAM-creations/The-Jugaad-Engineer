@@ -4,7 +4,7 @@ import { ImageUploader } from './components/ImageUploader';
 import { AnalysisLoading } from './components/AnalysisLoading';
 import { RepairGuideView } from './components/RepairGuideView';
 import { ChatDrawer } from './components/ChatDrawer';
-import { analyzeRepairScenario, generateRepairImage, fileToGenerativePart } from './services/geminiService';
+import { analyzeRepairScenario, generateRepairImage } from './services/geminiService';
 import { AppState, RepairGuide } from './types';
 import { Wrench, Zap, AlertCircle, MessageSquare } from 'lucide-react';
 
@@ -37,16 +37,19 @@ const App: React.FC = () => {
     setErrorMessage(null);
 
     try {
+      // Step 1: Brain 1 Analysis
       const guide = await analyzeRepairScenario(brokenImage, scrapImage);
       setRepairGuide(guide);
+      
+      // Immediately show the text guide while images load
       setAppState(AppState.GENERATING_IMAGES);
 
-      const referenceBase64 = await fileToGenerativePart(brokenImage);
-      
+      // Step 2: Brain 2 Visualization (Sequential for Stability)
       for (let i = 0; i < guide.steps.length; i++) {
         const step = guide.steps[i];
         try {
-          const imageUrl = await generateRepairImage(step.visualizationPrompt, referenceBase64);
+          // We DO NOT pass reference image here because 'broken' objects trigger safety filters
+          const imageUrl = await generateRepairImage(step.visualizationPrompt);
           
           if (imageUrl) {
             setRepairGuide(prev => {
@@ -57,9 +60,9 @@ const App: React.FC = () => {
             });
           }
 
+          // Small pause between images to avoid rate limits
           if (i < guide.steps.length - 1) {
-            // Increased delay to 2 seconds for better stability
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 2500));
           }
         } catch (imgError) {
           console.error(`Step ${i + 1} visualization failed:`, imgError);
@@ -71,7 +74,7 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error("App Error:", error);
       setAppState(AppState.ERROR);
-      setErrorMessage(error.message || "Engineers are busy. Please check your API limits or try a different image.");
+      setErrorMessage(error.message || "The engineering logic failed. Please try a clearer photo or check your connection.");
     }
   };
 

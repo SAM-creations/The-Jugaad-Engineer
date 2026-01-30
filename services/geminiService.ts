@@ -15,7 +15,7 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const MAX_SIZE = 768; // Reduced slightly for faster transmission and lower safety trigger risk
+        const MAX_SIZE = 768; 
 
         if (width > height) {
           if (width > MAX_SIZE) {
@@ -93,10 +93,12 @@ export const analyzeRepairScenario = async (
     2. PHYSICS REASONING: Plan a repair using ONLY the scrap materials shown.
     3. ART DIRECTION: For each step, generate a "visualizationPrompt".
     
-    CRITICAL IMAGE PROMPT RULES (TO AVOID SAFETY FILTERS):
-    - DO NOT use words like: "broken", "shattered", "cut", "pliers", "scissors", "sharp", "damage", "trash", "waste", "blood", "injury".
-    - DO use words like: "fused assembly", "mechanical connection", "precision alignment", "interlocked structure", "professional tool", "fabrication", "high-tensile bonding".
-    - Style: "Bright studio lighting", "Technical macro photography", "Clean workshop aesthetic".
+    VISUALIZATION PROMPT RULES (ULTRA-SAFE FOR AI):
+    - Describe the result as a "Brand New Product Design" or "Industrial Prototype".
+    - Focus on the materials: "polished wood", "matte polymer", "metallic finish", "woven texture".
+    - Style: "Apple industrial design style", "clean 3D render", "soft volumetric lighting", "white background".
+    - AVOID ALL WORDS RELATED TO DAMAGE: No "broken", "repair", "fix", "snap", "crack", "glue", "tape".
+    - USE POSITIVE CONSTRUCTION WORDS: "Integration", "Coupling", "Symmetry", "Reinforcement", "Assembly".
   `;
 
   const commonSchema = {
@@ -146,43 +148,39 @@ export const analyzeRepairScenario = async (
 // --- BRAIN 2: THE ARTIST (Gemini 2.5 Flash Image) ---
 
 export const generateRepairImage = async (
-  prompt: string,
-  referenceImageBase64?: string
+  prompt: string
 ): Promise<string | null> => {
-  // Ultra-aggressive scrubbing to remove any "scary" words for the safety filter
+  // Scrub any remaining negative words just in case
   const safePrompt = prompt
-    .replace(/broken|damage|shatter|snap|fracture|debris|trash|waste|junk/gi, "reclaimed component")
-    .replace(/cut|slice|saw|chop|pliers|blade|knife|sharp/gi, "precision tool")
-    .replace(/blood|hurt|injury|wound|danger|pain/gi, "safety")
-    .replace(/dirty|messy|ruined/gi, "industrial");
-
-  console.log("Sending scrubbed prompt to Artist Brain:", safePrompt);
+    .replace(/broken|damage|shatter|snap|fracture|debris|trash|waste|junk|crack/gi, "component")
+    .replace(/cut|slice|saw|chop|pliers|blade|knife|sharp/gi, "precision joint")
+    .replace(/blood|hurt|injury|wound|danger|pain/gi, "industrial")
+    .replace(/dirty|messy|ruined|scrap/gi, "prototype material");
 
   try {
     const contents: any = {
       parts: [
-        { text: `A clean, professional technical product photograph. Action: ${safePrompt}. Style: Bright white studio lighting, sharp macro focus, 8k resolution, minimalist workshop background.` }
+        { text: `A professional industrial design schematic of ${safePrompt}. Style: Bright studio lighting, clean minimal workshop environment, 8k resolution, photorealistic CAD render.` }
       ]
     };
 
-    if (referenceImageBase64) {
-      contents.parts.unshift({
-        inlineData: { mimeType: "image/jpeg", data: referenceImageBase64 }
-      });
-    }
+    // NOTE: We do NOT send the reference image here anymore.
+    // The "broken" pixels in the source image often trigger safety blocks.
+    // We let the model imagine a "clean" version of the engineer's plan.
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: contents,
       config: {
         imageConfig: { aspectRatio: "16:9" },
-        safetySettings: RELAXED_SAFETY // Use the most relaxed settings here
+        safetySettings: RELAXED_SAFETY 
       }
     });
 
     if (response.candidates?.[0]?.finishReason === 'SAFETY') {
-      console.error("Artist Brain blocked by safety filter for prompt:", safePrompt);
-      return null;
+      console.warn("Artist Brain blocked by safety filter. Attempting abstract fallback...");
+      // Try one more time with an extremely generic fallback prompt if blocked
+      return generateAbstractFallback(safePrompt);
     }
 
     const candidate = response.candidates?.[0];
@@ -193,9 +191,25 @@ export const generateRepairImage = async (
     }
   } catch (error: any) {
     console.error("Brain 2 error detail:", error);
-    if (error.message?.includes('429')) {
-      console.warn("Artist Brain hit rate limit. Cooling down...");
+  }
+  return null;
+};
+
+const generateAbstractFallback = async (subject: string): Promise<string | null> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: { parts: [{ text: `A clean 3D isometric view of a ${subject} made of polished materials. White background, soft shadows.` }] },
+      config: { imageConfig: { aspectRatio: "16:9" }, safetySettings: RELAXED_SAFETY }
+    });
+    const candidate = response.candidates?.[0];
+    if (candidate) {
+      for (const part of candidate.content.parts) {
+        if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+      }
     }
+  } catch (e) {
+    return null;
   }
   return null;
 };
