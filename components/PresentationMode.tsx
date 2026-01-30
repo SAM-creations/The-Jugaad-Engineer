@@ -21,8 +21,9 @@ const ActionIconMap: Record<ActionType, React.ElementType> = {
 };
 
 export const PresentationMode: React.FC<PresentationModeProps> = ({ guide, onClose }) => {
+  const steps = guide.steps || [];
   const [slideIndex, setSlideIndex] = useState(0);
-  const totalSlides = 1 + guide.steps.length + 1; 
+  const totalSlides = 1 + steps.length + 1; 
 
   const nextSlide = () => setSlideIndex(prev => Math.min(prev + 1, totalSlides - 1));
   const prevSlide = () => setSlideIndex(prev => Math.max(prev - 1, 0));
@@ -68,7 +69,9 @@ export const PresentationMode: React.FC<PresentationModeProps> = ({ guide, onClo
     }
 
     // Step Slide
-    const step = guide.steps[slideIndex - 1];
+    const step = steps[slideIndex - 1];
+    if (!step) return null; // Safety
+
     const Icon = ActionIconMap[step.actionType] || Wrench;
 
     return (
@@ -160,7 +163,7 @@ export const PresentationMode: React.FC<PresentationModeProps> = ({ guide, onClo
            <h1 className="text-6xl font-bold mb-8">{guide.title}</h1>
            <p className="text-2xl text-gray-600 mb-12">{guide.summary}</p>
         </div>
-        {guide.steps.map((s, i) => (
+        {(steps || []).map((s, i) => (
            <div key={i} className="slide-page bg-white">
              <h2 className="text-4xl font-bold mb-4">Step {i + 1}: {s.title} ({s.actionType})</h2>
              <p className="text-2xl leading-relaxed mb-8">{s.description}</p>

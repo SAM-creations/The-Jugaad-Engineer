@@ -22,7 +22,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ guide, isOpen, onClose, 
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (guide && !chatSessionRef.current) {
+    if (guide && apiKey && !chatSessionRef.current) {
       chatSessionRef.current = initChatSession(guide, apiKey);
     }
   }, [guide, apiKey]);

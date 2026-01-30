@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { AnalysisLoading } from './components/AnalysisLoading';
 import { RepairGuideView } from './components/RepairGuideView';
@@ -7,7 +7,7 @@ import { ChatDrawer } from './components/ChatDrawer';
 import { analyzeRepairScenario } from './services/geminiService';
 import { DEMO_GUIDE } from './services/demoService';
 import { AppState, RepairGuide } from './types';
-import { Wrench, Zap, AlertCircle, MessageSquare, PlayCircle, KeyRound } from 'lucide-react';
+import { Wrench, Zap, AlertCircle, MessageSquare, PlayCircle, KeyRound, X, Check, Save, RefreshCw, ChevronRight } from 'lucide-react';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
@@ -19,8 +19,34 @@ const App: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   
-  // Manual key override state
-  const [manualKey, setManualKey] = useState("");
+  // Custom API Key State
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [userApiKey, setUserApiKey] = useState<string>('');
+  const [tempKeyInput, setTempKeyInput] = useState('');
+
+  // Load key from local storage on mount
+  useEffect(() => {
+    const storedKey = localStorage.getItem('jugaad_user_api_key');
+    if (storedKey) {
+      setUserApiKey(storedKey);
+      setTempKeyInput(storedKey);
+    }
+  }, []);
+
+  const handleSaveKey = () => {
+    // Save to local storage and update state WITHOUT reloading
+    localStorage.setItem('jugaad_user_api_key', tempKeyInput);
+    setUserApiKey(tempKeyInput);
+    setShowKeyModal(false);
+    setErrorMessage(null);
+  };
+
+  const handleClearKey = () => {
+    localStorage.removeItem('jugaad_user_api_key');
+    setUserApiKey('');
+    setTempKeyInput('');
+    setShowKeyModal(false);
+  };
 
   const handleBrokenImage = (file: File | null) => {
     setBrokenImage(file);
@@ -35,8 +61,8 @@ const App: React.FC = () => {
   };
 
   const getEffectiveKey = () => {
-    // Return manual key if present, otherwise try env vars
-    if (manualKey && manualKey.length > 10) return manualKey;
+    // Priority: 1. User Custom Key, 2. Env Key
+    if (userApiKey && userApiKey.length > 10) return userApiKey;
     return process.env.API_KEY || "";
   };
 
@@ -48,7 +74,9 @@ const App: React.FC = () => {
     // Check if key looks valid
     if (!key || key.includes("PASTE_YOUR") || key.length < 10) {
       setAppState(AppState.ERROR);
-      setErrorMessage("Missing or invalid API Key. Please paste your key below.");
+      setErrorMessage("Please configure your API Key to continue.");
+      // Automatically prompt for key if missing
+      setShowKeyModal(true);
       return;
     }
 
@@ -60,7 +88,7 @@ const App: React.FC = () => {
       const guide = await analyzeRepairScenario(brokenImage, scrapImage, key);
       setRepairGuide(guide);
       
-      // BLUEPRINT MODE: Skip image generation. Go straight to Ready.
+      // BLUEPRINT MODE: Skip image generation here. The UI will handle Brain 2 calls in background.
       setAppState(AppState.READY);
 
     } catch (error: any) {
@@ -70,9 +98,9 @@ const App: React.FC = () => {
       const msg = error.message?.toLowerCase() || '';
       
       if (msg.includes('quota') || msg.includes('429')) {
-         setErrorMessage("⚠️ API QUOTA HIT! Please switch to Demo Mode.");
+         setErrorMessage("⚠️ Global Quota Exceeded. Please add your own API Key to continue.");
       } else if (msg.includes('api key') || msg.includes('400') || msg.includes('403') || msg.includes('invalid')) {
-         setErrorMessage("API Key Error: The key provided is invalid.");
+         setErrorMessage("API Key Error: The provided key is invalid.");
       } else {
          setErrorMessage(error.message || "Network issue detected.");
       }
@@ -104,6 +132,65 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-amber-500/30 overflow-x-hidden">
       {appState === AppState.ANALYZING && <AnalysisLoading />}
 
+      {/* API Key Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+            <button 
+              onClick={() => setShowKeyModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+            >
+              <X size={20} />
+            </button>
+            
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-amber-500/20 rounded-xl">
+                <KeyRound size={24} className="text-amber-500" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Add Your Own Key</h3>
+                <p className="text-xs text-slate-400">Enter a Google Gemini API Key</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">API Key</label>
+                <input 
+                  type="password" 
+                  value={tempKeyInput}
+                  onChange={(e) => setTempKeyInput(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white focus:border-amber-500 focus:outline-none font-mono text-sm"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={handleSaveKey}
+                  disabled={tempKeyInput.length < 10}
+                  className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20"
+                >
+                  <Save size={18} />
+                  Save Key
+                </button>
+                {userApiKey && (
+                  <button 
+                    onClick={handleClearKey}
+                    className="px-4 py-3 bg-slate-700 hover:bg-red-500/20 hover:text-red-400 text-slate-300 font-bold rounded-xl transition-all"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-500 text-center leading-relaxed">
+                Key is stored locally in browser. <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-amber-500 underline">Get a key here</a>.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav className="border-b border-slate-800 bg-slate-950/50 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={resetApp}>
@@ -113,23 +200,37 @@ const App: React.FC = () => {
             <span className="font-display font-bold text-xl hidden md:block tracking-tight">The Jugaad Engineer</span>
             <span className="font-display font-bold text-xl md:hidden">Jugaad Eng.</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
              {repairGuide && (
                <button 
                  onClick={() => setIsChatOpen(true)} 
-                 className="flex items-center gap-2 px-3 py-1.5 bg-amber-500 text-slate-900 rounded-full font-bold text-xs hover:bg-amber-400 transition-colors"
+                 className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-800 text-slate-300 border border-slate-700 rounded-full font-bold text-xs hover:bg-slate-700 transition-colors"
                >
                  <MessageSquare size={14} /> 
-                 <span>ASK ENGINEER</span>
+                 <span>ASK</span>
                </button>
              )}
-             {/* ALWAYS VISIBLE DEMO BUTTON FOR EMERGENCIES */}
+
+             {/* Custom Key Button */}
+             <button
+               onClick={() => setShowKeyModal(true)}
+               className={`flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs border transition-all ${
+                 userApiKey 
+                   ? 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20' 
+                   : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
+               }`}
+             >
+               {userApiKey ? <Check size={14} /> : <KeyRound size={14} />}
+               <span className="hidden sm:inline">{userApiKey ? 'My Key' : 'Add Key'}</span>
+             </button>
+
+             {/* Demo Button */}
              <button 
               onClick={runDemoSimulation}
-              className="flex items-center gap-2 text-xs font-mono font-bold text-amber-500 hover:text-amber-400 transition-colors border border-amber-500/30 hover:border-amber-500 bg-amber-500/10 px-3 py-1.5 rounded animate-pulse"
+              className="flex items-center gap-2 text-xs font-mono font-bold text-amber-500 hover:text-amber-400 transition-colors border border-amber-500/30 hover:border-amber-500 bg-amber-500/10 px-3 py-1.5 rounded"
              >
                <Zap size={12} />
-               DEMO MODE
+               <span className="hidden sm:inline">DEMO</span>
              </button>
           </div>
         </div>
@@ -145,42 +246,34 @@ const App: React.FC = () => {
               <p className="text-xl text-slate-400 text-balance">The Master AI Agent for Frugal Repair & Resourcefulness</p>
             </div>
 
+            {/* ERROR STATE with prominent Key Config */}
             {appState === AppState.ERROR && (
-              <div className="mb-8 p-6 bg-red-500/10 border border-red-500/50 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 animate-bounce-subtle">
-                <div className="flex items-start gap-3 w-full md:w-auto">
-                    <AlertCircle className="text-red-500 shrink-0 mt-1" />
-                    <div className="w-full">
-                        <p className="text-slate-200 text-lg font-bold">{errorMessage}</p>
-                        <p className="text-slate-400 text-sm mt-1">Paste your API Key below to fix immediately:</p>
-                        <div className="flex gap-2 mt-2 w-full max-w-md">
-                           <div className="relative flex-1">
-                             <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                             <input 
-                               type="text" 
-                               value={manualKey}
-                               onChange={(e) => setManualKey(e.target.value)}
-                               placeholder="AIzaSy..."
-                               className="w-full bg-slate-900 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-sm text-white focus:border-amber-500 focus:outline-none"
-                             />
-                           </div>
-                           <button 
-                             onClick={startAnalysis}
-                             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-bold whitespace-nowrap"
-                           >
-                             Try Key
-                           </button>
-                        </div>
+              <div className="mb-8 bg-slate-800 rounded-2xl border border-red-500/30 overflow-hidden shadow-2xl animate-bounce-subtle">
+                 <div className="p-6 bg-red-500/10 flex items-start gap-4">
+                    <AlertCircle className="text-red-500 shrink-0 mt-1" size={24} />
+                    <div className="flex-1">
+                      <h3 className="text-red-400 font-bold text-lg mb-1">Analysis Stopped</h3>
+                      <p className="text-slate-300">{errorMessage}</p>
                     </div>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto mt-4 md:mt-0">
+                 </div>
+                 
+                 <div className="p-6 bg-slate-800 border-t border-slate-700 flex flex-col sm:flex-row gap-4 items-center justify-between">
+                    <div className="flex items-center gap-3">
+                       <div className="p-2 bg-amber-500/20 rounded-lg">
+                          <KeyRound size={20} className="text-amber-500" />
+                       </div>
+                       <div className="text-left">
+                          <p className="font-bold text-white text-sm">Custom API Key Required</p>
+                          <p className="text-xs text-slate-500">Add your own key to bypass limits.</p>
+                       </div>
+                    </div>
                     <button 
-                        onClick={runDemoSimulation}
-                        className="flex items-center justify-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-xl transition-all shadow-lg shadow-amber-500/20 hover:scale-105 whitespace-nowrap"
+                       onClick={() => setShowKeyModal(true)}
+                       className="w-full sm:w-auto px-6 py-2.5 bg-slate-100 hover:bg-white text-slate-900 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
                     >
-                        <PlayCircle size={20} fill="currentColor" />
-                        ACTIVATE DEMO MODE
+                       Configure Key <ChevronRight size={16} />
                     </button>
-                </div>
+                 </div>
               </div>
             )}
 

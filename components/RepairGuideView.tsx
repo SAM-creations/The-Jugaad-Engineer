@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RepairGuide, ActionType, RepairStep } from '../types';
-import { Play, Share2, AlertTriangle, Volume2, Loader2, MessageSquare, Scissors, Link, Flame, Droplet, Hammer, Ruler, Shield, Sparkles, Wrench, Image as ImageIcon } from 'lucide-react';
+import { Play, Share2, AlertTriangle, Volume2, Loader2, MessageSquare, Scissors, Link, Flame, Droplet, Hammer, Ruler, Shield, Sparkles, Wrench, Image as ImageIcon, Clock } from 'lucide-react';
 import { PresentationMode } from './PresentationMode';
 import { generateStepAudio, generateRepairImage } from '../services/geminiService';
 
@@ -26,43 +26,69 @@ const ActionIconMap: Record<ActionType, React.ElementType> = {
   'GENERIC': Wrench
 };
 
+interface StepVisualizerProps {
+  step: RepairStep;
+  index: number;
+  apiKey: string;
+  shouldGenerate: boolean;
+  onComplete: () => void;
+}
+
 // --- Sub-component for individual step visualization ---
-const StepVisualizer: React.FC<{ step: RepairStep, index: number, apiKey: string }> = ({ step, index, apiKey }) => {
+const StepVisualizer: React.FC<StepVisualizerProps> = ({ step, index, apiKey, shouldGenerate, onComplete }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [loadingImage, setLoadingImage] = useState(true);
+  const [status, setStatus] = useState<'waiting' | 'generating' | 'success' | 'error'>('waiting');
   const Icon = ActionIconMap[step.actionType] || Wrench;
+  const hasAttempted = useRef(false);
 
   useEffect(() => {
-    let isMounted = true;
-    
-    // If no API key (Demo Mode), don't even try to fetch images, just show blueprints.
+    // If we already have an image or tried, don't do anything
+    if (hasAttempted.current) return;
+
+    // If it's not our turn yet, stay waiting
+    if (!shouldGenerate) {
+        setStatus('waiting');
+        return;
+    }
+
+    // It is our turn!
+    hasAttempted.current = true;
+
+    // If no API key, skip immediately to completion (stay in blueprint mode)
     if (!apiKey || apiKey.length < 10) {
-      setLoadingImage(false);
+      setStatus('error');
+      onComplete();
       return;
     }
 
+    let isMounted = true;
+    setStatus('generating');
+
     const fetchImage = async () => {
-      // Small delay based on index to stagger requests slightly so we don't hammer the API all at once
-      // This creates the "pop in one by one" effect
-      await new Promise(r => setTimeout(r, index * 1200));
-      
-      if (!isMounted) return;
-      
       try {
         const url = await generateRepairImage(step.visualizationPrompt, apiKey);
-        if (isMounted && url) {
-          setImageUrl(url);
+        if (isMounted) {
+            if (url) {
+                setImageUrl(url);
+                setStatus('success');
+            } else {
+                setStatus('error'); // Quota or safety block
+            }
         }
       } catch (e) {
-        console.error("Failed to load image for step", index);
+        console.error(`Step ${index} visualization failed`, e);
+        if (isMounted) setStatus('error');
       } finally {
-        if (isMounted) setLoadingImage(false);
+        if (isMounted) {
+            // Signal parent to move to next item regardless of success/fail
+            onComplete();
+        }
       }
     };
 
     fetchImage();
     return () => { isMounted = false; };
-  }, [step.visualizationPrompt, index, apiKey]);
+  }, [shouldGenerate, apiKey, step.visualizationPrompt, index, onComplete]);
 
   return (
     <div className="md:w-1/3 h-64 md:h-auto bg-[#0f172a] relative overflow-hidden flex items-center justify-center border-b md:border-b-0 md:border-r border-slate-700 transition-all duration-500 group-hover:border-slate-600">
@@ -88,8 +114,8 @@ const StepVisualizer: React.FC<{ step: RepairStep, index: number, apiKey: string
         ) : (
           <div className="relative z-10 flex flex-col items-center animate-fadeIn text-center p-4">
             <div className="w-20 h-20 rounded-2xl border-2 border-slate-700 bg-slate-800/80 flex items-center justify-center mb-3 shadow-2xl relative overflow-hidden backdrop-blur-sm">
-               {/* Subtle scanning effect */}
-               {loadingImage && (
+               {/* Scan effect only when generating */}
+               {status === 'generating' && (
                  <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-500/10 to-transparent translate-y-[-100%] animate-scan"></div>
                )}
                <Icon size={40} className="text-slate-500" strokeWidth={1.5} />
@@ -97,13 +123,23 @@ const StepVisualizer: React.FC<{ step: RepairStep, index: number, apiKey: string
             
             <div className="flex flex-col items-center">
               <span className="text-slate-500 font-mono text-xs uppercase tracking-widest mb-1.5 font-bold">Blueprint Mode</span>
-              {loadingImage ? (
+              
+              {status === 'generating' && (
                  <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
                     <Loader2 size={10} className="animate-spin text-amber-500" /> 
                     <span className="text-[10px] text-amber-500 font-bold tracking-wide">GENERATING...</span>
                  </div>
-              ) : (
-                <span className="text-[10px] text-slate-600">Schematic View</span>
+              )}
+
+              {status === 'waiting' && (
+                 <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
+                    <Clock size={10} className="text-slate-500" /> 
+                    <span className="text-[10px] text-slate-500 font-bold tracking-wide">QUEUED</span>
+                 </div>
+              )}
+
+              {status === 'error' && (
+                 <span className="text-[10px] text-slate-600">Schematic View</span>
               )}
             </div>
             <style>{`
@@ -129,6 +165,9 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
   const [showPresentation, setShowPresentation] = useState(false);
   const [loadingAudioStep, setLoadingAudioStep] = useState<number | null>(null);
   const [playingAudioStep, setPlayingAudioStep] = useState<number | null>(null);
+  
+  // Controls the waterfall loading of images
+  const [generationQueueIndex, setGenerationQueueIndex] = useState(0);
 
   const playAudio = async (text: string, index: number) => {
     if (playingAudioStep === index) return; 
@@ -155,6 +194,9 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
   if (showPresentation) {
     return <PresentationMode guide={guide} onClose={() => setShowPresentation(false)} />;
   }
+
+  // Defensive: Ensure guide exists
+  if (!guide) return null;
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-20 animate-fadeIn">
@@ -207,43 +249,56 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
       <div className="space-y-8">
         <h2 className="text-2xl font-bold text-white mb-6 font-display border-l-4 border-amber-500 pl-4">Repair Instructions</h2>
         <div className="grid gap-6">
-          {guide.steps.map((step, idx) => (
-            <div key={idx} className="bg-slate-800 rounded-xl overflow-hidden flex flex-col md:flex-row border border-slate-700 hover:border-slate-600 transition-colors group shadow-lg">
-              
-              {/* Visualizer Component (Handles its own image loading) */}
-              <StepVisualizer step={step} index={idx} apiKey={apiKey} />
-
-              {/* Text Content */}
-              <div className="p-6 md:w-2/3 flex flex-col justify-center">
-                <div className="flex justify-between items-start mb-2">
-                   <h3 className="text-xl font-bold text-white group-hover:text-amber-400 transition-colors">{step.title}</h3>
-                   <button 
-                    onClick={() => playAudio(step.description, idx)}
-                    disabled={loadingAudioStep === idx || playingAudioStep === idx}
-                    className={`p-2 rounded-full transition-all ${
-                      playingAudioStep === idx 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                    }`}
-                   >
-                     {loadingAudioStep === idx ? <Loader2 size={18} className="animate-spin" /> : <Volume2 size={18} className={playingAudioStep === idx ? "animate-pulse" : ""} />}
-                   </button>
-                </div>
-                <p className="text-slate-300 mb-6 text-lg leading-relaxed">{step.description}</p>
+          {/* SAFE NAVIGATION: Use defensive mapping */}
+          {(guide.steps || []).length > 0 ? (
+            (guide.steps || []).map((step, idx) => (
+              <div key={idx} className="bg-slate-800 rounded-xl overflow-hidden flex flex-col md:flex-row border border-slate-700 hover:border-slate-600 transition-colors group shadow-lg">
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50">
-                     <span className="text-xs text-slate-500 uppercase font-bold block mb-1">Tools & Materials</span>
-                     <span className="text-slate-300 text-sm">{step.materialUsed}</span>
+                {/* Visualizer Component (Handles its own sequential image loading) */}
+                <StepVisualizer 
+                  step={step} 
+                  index={idx} 
+                  apiKey={apiKey} 
+                  shouldGenerate={idx === generationQueueIndex}
+                  onComplete={() => setGenerationQueueIndex(prev => prev + 1)}
+                />
+
+                {/* Text Content */}
+                <div className="p-6 md:w-2/3 flex flex-col justify-center">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-xl font-bold text-white group-hover:text-amber-400 transition-colors">{step.title}</h3>
+                    <button 
+                      onClick={() => playAudio(step.description, idx)}
+                      disabled={loadingAudioStep === idx || playingAudioStep === idx}
+                      className={`p-2 rounded-full transition-all ${
+                        playingAudioStep === idx 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                      }`}
+                    >
+                      {loadingAudioStep === idx ? <Loader2 size={18} className="animate-spin" /> : <Volume2 size={18} className={playingAudioStep === idx ? "animate-pulse" : ""} />}
+                    </button>
                   </div>
-                  <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
-                     <span className="text-xs text-amber-500/70 uppercase font-bold block mb-1">Why this works</span>
-                     <span className="text-amber-100/80 text-sm italic">{step.physicsPrinciple}</span>
+                  <p className="text-slate-300 mb-6 text-lg leading-relaxed">{step.description}</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50">
+                      <span className="text-xs text-slate-500 uppercase font-bold block mb-1">Tools & Materials</span>
+                      <span className="text-slate-300 text-sm">{step.materialUsed}</span>
+                    </div>
+                    <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                      <span className="text-xs text-amber-500/70 uppercase font-bold block mb-1">Why this works</span>
+                      <span className="text-amber-100/80 text-sm italic">{step.physicsPrinciple}</span>
+                    </div>
                   </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="text-center p-8 bg-slate-800/50 rounded-xl border border-slate-700">
+              <p className="text-slate-400">No steps generated. Please try analyzing again.</p>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
