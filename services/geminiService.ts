@@ -67,7 +67,7 @@ const decodeAudioData = async (
   return buffer;
 };
 
-// Relaxed safety settings
+// Relaxed safety settings to allow for tools and repair imagery
 const RELAXED_SAFETY = [
   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
   { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -76,12 +76,15 @@ const RELAXED_SAFETY = [
 ];
 
 // --- BRAIN 1: THE ANALYST (Gemini 3 Flash - Thinking) ---
+// This step is FAST because it only generates text/JSON, no images yet.
 
 export const analyzeRepairScenario = async (
   brokenFile: File, 
   scrapFile: File,
   apiKey: string
 ): Promise<RepairGuide> => {
+  if (!apiKey) throw new Error("API Key is missing");
+  
   const ai = new GoogleGenAI({ apiKey });
   const brokenBase64 = await fileToGenerativePart(brokenFile);
   const scrapBase64 = await fileToGenerativePart(scrapFile);
@@ -140,7 +143,7 @@ export const analyzeRepairScenario = async (
     model: 'gemini-3-flash-preview', 
     contents: { parts: imageParts },
     config: {
-      thinkingConfig: { thinkingBudget: 2048 }, // Increased slightly for better text detail
+      thinkingConfig: { thinkingBudget: 2048 }, 
       responseMimeType: 'application/json',
       responseSchema: commonSchema,
       safetySettings: RELAXED_SAFETY
@@ -151,21 +154,27 @@ export const analyzeRepairScenario = async (
   throw new Error("Failed to generate repair guide.");
 };
 
-// --- BRAIN 2: THE ARTIST (Gemini 2.5 Flash Image) ---
+// --- BRAIN 2: THE ARTIST (Gemini 2.5 Flash Image - Nano Banana) ---
+// This is called in the background by the UI for each step.
 
 export const generateRepairImage = async (prompt: string, apiKey: string): Promise<string | null> => {
+  // If no key is provided (e.g. strict Demo Mode), return null immediately so we stay in Blueprint mode.
+  if (!apiKey || apiKey.length < 10) return null;
+
   const ai = new GoogleGenAI({ apiKey });
-  // Safe-guard the prompt to avoid safety filters on tools
+  
+  // Clean prompt to ensure safety compliance
   const safePrompt = prompt
     .replace(/blood|injury|weapon|violence/gi, "")
-    + ", realistic, high quality, instructional photography style, bright lighting";
+    + ", realistic, high quality, instructional photography style, bright lighting, clear focus";
 
   try {
+    // USING NANO BANANA MODEL AS REQUESTED
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: { parts: [{ text: safePrompt }] },
       config: {
-        imageConfig: { aspectRatio: "16:9" }, // Standard image ratio
+        imageConfig: { aspectRatio: "16:9" }, 
         safetySettings: RELAXED_SAFETY
       }
     });
@@ -177,13 +186,14 @@ export const generateRepairImage = async (prompt: string, apiKey: string): Promi
       }
     }
   } catch (e) {
-    console.warn("Image gen failed (likely safety or quota), returning null to keep blueprint icon.", e);
+    console.warn("Image gen failed (safety or quota). Keeping blueprint.", e);
   }
   return null;
 };
 
 // --- TTS & CHAT ---
 export const generateStepAudio = async (text: string, apiKey: string): Promise<AudioBuffer> => {
+  if (!apiKey) throw new Error("No API Key");
   const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",

@@ -34,8 +34,16 @@ const StepVisualizer: React.FC<{ step: RepairStep, index: number, apiKey: string
 
   useEffect(() => {
     let isMounted = true;
+    
+    // If no API key (Demo Mode), don't even try to fetch images, just show blueprints.
+    if (!apiKey || apiKey.length < 10) {
+      setLoadingImage(false);
+      return;
+    }
+
     const fetchImage = async () => {
       // Small delay based on index to stagger requests slightly so we don't hammer the API all at once
+      // This creates the "pop in one by one" effect
       await new Promise(r => setTimeout(r, index * 1200));
       
       if (!isMounted) return;
@@ -81,7 +89,9 @@ const StepVisualizer: React.FC<{ step: RepairStep, index: number, apiKey: string
           <div className="relative z-10 flex flex-col items-center animate-fadeIn text-center p-4">
             <div className="w-20 h-20 rounded-2xl border-2 border-slate-700 bg-slate-800/80 flex items-center justify-center mb-3 shadow-2xl relative overflow-hidden backdrop-blur-sm">
                {/* Subtle scanning effect */}
-               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-500/10 to-transparent translate-y-[-100%] animate-scan"></div>
+               {loadingImage && (
+                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-500/10 to-transparent translate-y-[-100%] animate-scan"></div>
+               )}
                <Icon size={40} className="text-slate-500" strokeWidth={1.5} />
             </div>
             
@@ -90,10 +100,10 @@ const StepVisualizer: React.FC<{ step: RepairStep, index: number, apiKey: string
               {loadingImage ? (
                  <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
                     <Loader2 size={10} className="animate-spin text-amber-500" /> 
-                    <span className="text-[10px] text-amber-500 font-bold tracking-wide">RENDERING...</span>
+                    <span className="text-[10px] text-amber-500 font-bold tracking-wide">GENERATING...</span>
                  </div>
               ) : (
-                <span className="text-[10px] text-slate-600">Image unavailable</span>
+                <span className="text-[10px] text-slate-600">Schematic View</span>
               )}
             </div>
             <style>{`
