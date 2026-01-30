@@ -49,10 +49,14 @@ const App: React.FC = () => {
       console.error("App Error:", error);
       setAppState(AppState.ERROR);
       
-      if (error.message?.includes('API key') || error.message?.includes('400') || error.message?.includes('403')) {
-         setErrorMessage("API Key Error: The provided key is expired or invalid. Please renew it.");
+      const msg = error.message?.toLowerCase() || '';
+      
+      if (msg.includes('quota') || msg.includes('429')) {
+         setErrorMessage("⚠️ API QUOTA LIMIT REACHED! Don't panic. Use the 'Demo Mode' button below to present your pitch perfectly.");
+      } else if (msg.includes('api key') || msg.includes('400') || msg.includes('403')) {
+         setErrorMessage("API Key Error: The provided key is expired or invalid. Switch to Demo Mode.");
       } else {
-         setErrorMessage(error.message || "The engineering logic failed. Please try a clearer photo or check your connection.");
+         setErrorMessage(error.message || "Network issue detected. Switch to Demo Mode to continue presentation.");
       }
     }
   };
@@ -63,7 +67,7 @@ const App: React.FC = () => {
     setRepairGuide(null);
     
     // Simulate Analysis Time
-    await new Promise(resolve => setTimeout(resolve, 2500));
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     setRepairGuide(DEMO_GUIDE);
     setAppState(AppState.READY);
@@ -101,14 +105,14 @@ const App: React.FC = () => {
                  <span>ASK ENGINEER</span>
                </button>
              )}
-             {appState === AppState.IDLE && (
-                 <button 
-                  onClick={runDemoSimulation}
-                  className="text-xs font-mono text-slate-500 hover:text-amber-400 transition-colors border border-slate-800 hover:border-amber-500/50 px-3 py-1 rounded"
-                 >
-                   DEMO MODE
-                 </button>
-             )}
+             {/* ALWAYS VISIBLE DEMO BUTTON FOR EMERGENCIES */}
+             <button 
+              onClick={runDemoSimulation}
+              className="flex items-center gap-2 text-xs font-mono font-bold text-amber-500 hover:text-amber-400 transition-colors border border-amber-500/30 hover:border-amber-500 bg-amber-500/10 px-3 py-1.5 rounded animate-pulse"
+             >
+               <Zap size={12} />
+               DEMO MODE
+             </button>
           </div>
         </div>
       </nav>
@@ -124,20 +128,20 @@ const App: React.FC = () => {
             </div>
 
             {appState === AppState.ERROR && (
-              <div className="mb-8 p-6 bg-red-500/10 border border-red-500/50 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="mb-8 p-6 bg-red-500/10 border border-red-500/50 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 animate-bounce-subtle">
                 <div className="flex items-start gap-3">
                     <AlertCircle className="text-red-500 shrink-0 mt-1" />
                     <div>
-                        <p className="text-slate-300 text-sm font-medium">{errorMessage}</p>
-                        <p className="text-slate-500 text-xs mt-1">Don't worry, you can still present your project using the Simulation Mode.</p>
+                        <p className="text-slate-200 text-lg font-bold">{errorMessage}</p>
+                        <p className="text-slate-400 text-sm mt-1">This is a common hackathon issue. Click the button to load the perfect backup.</p>
                     </div>
                 </div>
                 <button 
                     onClick={runDemoSimulation}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg transition-all border border-slate-600 hover:border-amber-500 hover:text-amber-400 whitespace-nowrap"
+                    className="flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-xl transition-all shadow-lg shadow-amber-500/20 hover:scale-105 whitespace-nowrap"
                 >
-                    <PlayCircle size={18} />
-                    Run Simulation
+                    <PlayCircle size={20} fill="currentColor" />
+                    ACTIVATE DEMO MODE
                 </button>
               </div>
             )}
