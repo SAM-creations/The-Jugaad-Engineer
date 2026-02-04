@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, X, Printer, Scissors, Link, Flame, Droplet, Hammer, Ruler, Shield, Sparkles, Wrench } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Printer, Scissors, Link, Flame, Droplet, Hammer, Ruler, Shield, Sparkles, Wrench, Presentation } from 'lucide-react';
 import { RepairGuide, ActionType } from '../types';
+import PptxGenJS from 'pptxgenjs';
 
 interface PresentationModeProps {
   guide: RepairGuide;
@@ -28,6 +28,75 @@ export const PresentationMode: React.FC<PresentationModeProps> = ({ guide, onClo
   const nextSlide = () => setSlideIndex(prev => Math.min(prev + 1, totalSlides - 1));
   const prevSlide = () => setSlideIndex(prev => Math.max(prev - 1, 0));
   const handlePrint = () => window.print();
+
+  const handleExportPPT = () => {
+    const pres = new PptxGenJS();
+    pres.author = 'The Jugaad Engineer';
+    pres.title = guide.title;
+
+    // --- Slide 1: Title ---
+    let slide = pres.addSlide();
+    slide.background = { color: "111827" }; // slate-900
+    slide.addText("The Jugaad Engineer", { x: 0.5, y: 0.3, w: "90%", fontSize: 14, color: "F59E0B", bold: true });
+    slide.addText(guide.title, { x: 0.5, y: "40%", w: "90%", fontSize: 36, color: "FFFFFF", bold: true, align: "center" });
+    slide.addText(guide.summary, { x: 1, y: "60%", w: "80%", fontSize: 16, color: "94A3B8", align: "center" });
+
+    // --- Slide 2: Analysis ---
+    slide = pres.addSlide();
+    slide.background = { color: "F8FAFC" }; // slate-50
+    slide.addText("Repair Strategy", { x: 0.5, y: 0.5, fontSize: 24, bold: true, color: "0F172A" });
+    
+    // Broken Object Section
+    slide.addShape(pres.ShapeType.rect, { x: 0.5, y: 1.2, w: 4.25, h: 4.0, fill: { color: "E2E8F0" } });
+    slide.addText("Problem Analysis", { x: 0.7, y: 1.5, fontSize: 16, bold: true, color: "EF4444" });
+    slide.addText(guide.brokenObjectAnalysis, { x: 0.7, y: 1.9, w: 3.8, fontSize: 12, color: "334155" });
+
+    // Scrap Section
+    slide.addShape(pres.ShapeType.rect, { x: 5.25, y: 1.2, w: 4.25, h: 4.0, fill: { color: "E2E8F0" } });
+    slide.addText("Available Resources", { x: 5.45, y: 1.5, fontSize: 16, bold: true, color: "22C55E" });
+    slide.addText(guide.scrapPileAnalysis, { x: 5.45, y: 1.9, w: 3.8, fontSize: 12, color: "334155" });
+
+    // --- Steps Slides ---
+    steps.forEach((step, index) => {
+      slide = pres.addSlide();
+      slide.background = { color: "FFFFFF" };
+      
+      // Header
+      slide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: "100%", h: 1.0, fill: { color: "0F172A" } });
+      slide.addText(`Step ${index + 1}: ${step.title}`, { x: 0.5, y: 0.25, w: "90%", fontSize: 24, bold: true, color: "FFFFFF" });
+      
+      // Left Column: Text
+      slide.addText(step.description, { x: 0.5, y: 1.5, w: 5, fontSize: 16, color: "334155" });
+      
+      // Details Box
+      const detailY = 4.0;
+      slide.addShape(pres.ShapeType.line, { x: 0.5, y: detailY, w: 5, h: 0, line: { color: "CBD5E1", width: 1 } });
+      
+      slide.addText("Action Type:", { x: 0.5, y: detailY + 0.3, fontSize: 11, bold: true, color: "64748B" });
+      slide.addText(step.actionType, { x: 2.0, y: detailY + 0.3, fontSize: 11, color: "0F172A", bold: true });
+      
+      slide.addText("Material:", { x: 0.5, y: detailY + 0.6, fontSize: 11, bold: true, color: "64748B" });
+      slide.addText(step.materialUsed, { x: 2.0, y: detailY + 0.6, fontSize: 11, color: "0F172A" });
+      
+      slide.addText("Physics:", { x: 0.5, y: detailY + 0.9, fontSize: 11, bold: true, color: "64748B" });
+      slide.addText(step.physicsPrinciple, { x: 2.0, y: detailY + 0.9, fontSize: 11, color: "0F172A", italic: true });
+
+      // Right Column: Image or Placeholder
+      if (step.generatedImageUrl) {
+        slide.addImage({ data: step.generatedImageUrl, x: 5.8, y: 1.5, w: 3.8, h: 3.8 });
+      } else {
+        slide.addShape(pres.ShapeType.rect, { x: 5.8, y: 1.5, w: 3.8, h: 3.8, fill: { color: "F1F5F9" }, line: { color: "CBD5E1", dashType: "dash" } });
+        slide.addText("Schematic Placeholder", { x: 5.8, y: 3.2, w: 3.8, fontSize: 12, color: "94A3B8", align: "center" });
+      }
+    });
+
+    // --- Outro Slide ---
+    slide = pres.addSlide();
+    slide.background = { color: "111827" };
+    slide.addText("Repair Complete", { x: 0.5, y: 0.5, w: "90%", fontSize: 44, color: "22C55E", bold: true, align: "center" });
+
+    pres.writeFile({ fileName: `Jugaad_Engineer_${new Date().toISOString().split('T')[0]}.pptx` });
+  };
 
   const renderSlideContent = () => {
     // Title Slide
@@ -110,11 +179,17 @@ export const PresentationMode: React.FC<PresentationModeProps> = ({ guide, onClo
               backgroundSize: '40px 40px'
            }}></div>
            
-           <div className="relative z-10 flex flex-col items-center">
-             <Icon size={180} className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]" strokeWidth={1} />
-             <div className="mt-8 text-slate-400 font-mono text-sm tracking-[0.5em] uppercase border-t border-slate-500 pt-4">
-                Schematic: {step.actionType}
-             </div>
+           <div className="relative z-10 flex flex-col items-center w-full h-full">
+             {step.generatedImageUrl ? (
+               <img src={step.generatedImageUrl} alt={step.title} className="w-full h-full object-cover" />
+             ) : (
+               <div className="flex flex-col items-center justify-center h-full">
+                 <Icon size={180} className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]" strokeWidth={1} />
+                 <div className="mt-8 text-slate-400 font-mono text-sm tracking-[0.5em] uppercase border-t border-slate-500 pt-4">
+                    Schematic: {step.actionType}
+                 </div>
+               </div>
+             )}
            </div>
         </div>
       </div>
@@ -127,6 +202,9 @@ export const PresentationMode: React.FC<PresentationModeProps> = ({ guide, onClo
          <div className="font-bold text-lg tracking-tight">The Jugaad Engineer</div>
          <div className="flex items-center gap-2">
             <span className="mr-4 text-sm text-slate-400">Step {slideIndex} of {totalSlides - 1}</span>
+            <button onClick={handleExportPPT} className="p-2 hover:bg-slate-100 rounded-full flex items-center gap-2 text-slate-600">
+              <Presentation size={20} /> <span className="hidden sm:inline">Download PPT</span>
+            </button>
             <button onClick={handlePrint} className="p-2 hover:bg-slate-100 rounded-full flex items-center gap-2 text-slate-600">
               <Printer size={20} /> <span className="hidden sm:inline">Print / PDF</span>
             </button>
@@ -167,6 +245,11 @@ export const PresentationMode: React.FC<PresentationModeProps> = ({ guide, onClo
            <div key={i} className="slide-page bg-white">
              <h2 className="text-4xl font-bold mb-4">Step {i + 1}: {s.title} ({s.actionType})</h2>
              <p className="text-2xl leading-relaxed mb-8">{s.description}</p>
+             {s.generatedImageUrl && (
+                <div className="mt-8 border-4 border-slate-900">
+                  <img src={s.generatedImageUrl} className="w-full max-w-2xl" />
+                </div>
+             )}
            </div>
         ))}
       </div>

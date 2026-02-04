@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { RepairGuide, ActionType, RepairStep } from '../types';
 import { Play, Share2, AlertTriangle, Volume2, Loader2, MessageSquare, Scissors, Link, Flame, Droplet, Hammer, Ruler, Shield, Sparkles, Wrench, Image as ImageIcon, Clock } from 'lucide-react';
@@ -32,10 +31,11 @@ interface StepVisualizerProps {
   apiKey: string;
   shouldGenerate: boolean;
   onComplete: () => void;
+  onImageGenerated?: (url: string) => void;
 }
 
 // --- Sub-component for individual step visualization ---
-const StepVisualizer: React.FC<StepVisualizerProps> = ({ step, index, apiKey, shouldGenerate, onComplete }) => {
+const StepVisualizer: React.FC<StepVisualizerProps> = ({ step, index, apiKey, shouldGenerate, onComplete, onImageGenerated }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<'waiting' | 'generating' | 'success' | 'error'>('waiting');
   const Icon = ActionIconMap[step.actionType] || Wrench;
@@ -71,6 +71,7 @@ const StepVisualizer: React.FC<StepVisualizerProps> = ({ step, index, apiKey, sh
             if (url) {
                 setImageUrl(url);
                 setStatus('success');
+                onImageGenerated?.(url);
             } else {
                 setStatus('error'); // Quota or safety block
             }
@@ -88,7 +89,7 @@ const StepVisualizer: React.FC<StepVisualizerProps> = ({ step, index, apiKey, sh
 
     fetchImage();
     return () => { isMounted = false; };
-  }, [shouldGenerate, apiKey, step.visualizationPrompt, index, onComplete]);
+  }, [shouldGenerate, apiKey, step.visualizationPrompt, index, onComplete, onImageGenerated]);
 
   return (
     <div className="md:w-1/3 h-64 md:h-auto bg-[#0f172a] relative overflow-hidden flex items-center justify-center border-b md:border-b-0 md:border-r border-slate-700 transition-all duration-500 group-hover:border-slate-600">
@@ -165,9 +166,14 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
   const [showPresentation, setShowPresentation] = useState(false);
   const [loadingAudioStep, setLoadingAudioStep] = useState<number | null>(null);
   const [playingAudioStep, setPlayingAudioStep] = useState<number | null>(null);
+  const [stepImages, setStepImages] = useState<Record<number, string>>({});
   
   // Controls the waterfall loading of images
   const [generationQueueIndex, setGenerationQueueIndex] = useState(0);
+
+  const handleImageLoaded = (index: number, url: string) => {
+    setStepImages(prev => ({...prev, [index]: url}));
+  };
 
   const playAudio = async (text: string, index: number) => {
     if (playingAudioStep === index) return; 
@@ -191,8 +197,17 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
     }
   };
 
+  // Enhance guide with captured images for PresentationMode
+  const enrichedGuide = {
+    ...guide,
+    steps: guide.steps.map((step, idx) => ({
+      ...step,
+      generatedImageUrl: stepImages[idx]
+    }))
+  };
+
   if (showPresentation) {
-    return <PresentationMode guide={guide} onClose={() => setShowPresentation(false)} />;
+    return <PresentationMode guide={enrichedGuide} onClose={() => setShowPresentation(false)} />;
   }
 
   // Defensive: Ensure guide exists
@@ -261,6 +276,7 @@ export const RepairGuideView: React.FC<RepairGuideViewProps> = ({ guide, onReset
                   apiKey={apiKey} 
                   shouldGenerate={idx === generationQueueIndex}
                   onComplete={() => setGenerationQueueIndex(prev => prev + 1)}
+                  onImageGenerated={(url) => handleImageLoaded(idx, url)}
                 />
 
                 {/* Text Content */}
