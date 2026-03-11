@@ -9,8 +9,8 @@ import { DEMO_GUIDE } from './services/demoService';
 import { AppState, RepairGuide } from './types';
 import { Wrench, Zap, AlertCircle, MessageSquare, PlayCircle, KeyRound, X, Check, Save, RefreshCw, ChevronRight } from 'lucide-react';
 
-// YOUR HARDCODED KEY - Acts as the fallback default
-const DEFAULT_API_KEY = "AIzaSyBA6QBhISmLFs8Kt6o9XoWSdTqF2Rc6sQs";
+// Use environment variable if available, otherwise fallback to the hardcoded key
+const DEFAULT_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyBA6QBhISmLFs8Kt6o9XoWSdTqF2Rc6sQs";
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
