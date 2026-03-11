@@ -10,7 +10,7 @@ import { AppState, RepairGuide } from './types';
 import { Wrench, Zap, AlertCircle, MessageSquare, PlayCircle, KeyRound, X, Check, Save, RefreshCw, ChevronRight } from 'lucide-react';
 
 // YOUR HARDCODED KEY - Acts as the fallback default
-const DEFAULT_API_KEY = "AIzaSyBErOAfdk2UQ-NIcrrCaO3c1x3pADGzfPg";
+const DEFAULT_API_KEY = "AIzaSyBA6QBhISmLFs8Kt6o9XoWSdTqF2Rc6sQs";
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);

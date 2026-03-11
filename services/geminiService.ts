@@ -203,7 +203,7 @@ export const generateRepairImage = async (prompt: string, apiKey: string): Promi
     });
 
     const candidate = response.candidates?.[0];
-    if (candidate) {
+    if (candidate && candidate.content && candidate.content.parts) {
       for (const part of candidate.content.parts) {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
